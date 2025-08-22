@@ -14,7 +14,7 @@ const attendanceRoutes = require('./routes/attendance');
 const uploadRoutes = require('./routes/upload');
 
 const app = express();
-const PORT = process.env.PORT ;
+const PORT = process.env.PORT || 5000;
 
 // Security middleware
 app.use(helmet());
@@ -35,10 +35,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/construction_management', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/construction_management')
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch(err => console.error('❌ MongoDB connection error:', err));
 
