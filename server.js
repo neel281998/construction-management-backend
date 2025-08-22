@@ -39,6 +39,22 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/construct
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch(err => console.error('❌ MongoDB connection error:', err));
 
+// Root endpoint for debugging
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Construction Management API is running!',
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      sites: '/api/sites',
+      vehicles: '/api/vehicles',
+      inventory: '/api/inventory'
+    }
+  });
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
