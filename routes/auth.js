@@ -39,28 +39,29 @@ router.post('/register', async (req, res) => {
       password,
       firstName,
       lastName,
-      role: role || 'worker'
+      role: role || 'worker',
+      isVerified: true // Auto-verify user
     });
     
-    // Generate and send OTP
-    const otp = user.generateOTP();
     await user.save();
     
-    // Send OTP email
-    try {
-      await sendOTPEmail(email, otp, `${firstName} ${lastName}`);
-    } catch (emailError) {
-      console.error('Failed to send OTP email:', emailError);
-      // Continue with registration even if email fails
-    }
+    // Generate JWT token for immediate login
+    const token = generateToken(user._id);
     
     res.status(201).json({
       success: true,
-      message: 'User registered successfully. OTP sent to email.',
+      message: 'User registered successfully!',
       data: {
-        userId: user._id,
-        email: user.email,
-        otpSent: true
+        token,
+        user: {
+          _id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          permissions: user.permissions,
+          assignedSites: user.assignedSites
+        }
       }
     });
     
@@ -235,14 +236,15 @@ router.post('/login', async (req, res) => {
       });
     }
     
-    if (!user.isVerified) {
-      return res.status(401).json({
-        success: false,
-        message: 'Please verify your email first',
-        requiresVerification: true,
-        email: user.email
-      });
-    }
+    // Skip email verification check - users are auto-verified
+    // if (!user.isVerified) {
+    //   return res.status(401).json({
+    //     success: false,
+    //     message: 'Please verify your email first',
+    //     requiresVerification: true,
+    //     email: user.email
+    //   });
+    // }
     
     // Check password
     const isPasswordValid = await user.comparePassword(password);

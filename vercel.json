@@ -16,6 +16,10 @@
     {
       "src": "api/simple-test.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "api/test-email.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -30,6 +34,10 @@
     {
       "src": "/simple-test",
       "dest": "/api/simple-test.js"
+    },
+    {
+      "src": "/test-email",
+      "dest": "/api/test-email.js"
     },
     {
       "src": "/(.*)",
