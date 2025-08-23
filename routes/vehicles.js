@@ -142,6 +142,57 @@ router.post('/', authenticateToken, requirePermission('vehicle.create'), async (
   }
 });
 
+// Update vehicle
+router.put('/:id', authenticateToken, requirePermission('vehicle.update'), async (req, res) => {
+  try {
+    const vehicle = await Vehicle.findById(req.params.id);
+    
+    if (!vehicle) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vehicle not found'
+      });
+    }
+    
+    // Update vehicle fields
+    Object.assign(vehicle, req.body);
+    await vehicle.save();
+    
+    // Populate references
+    await vehicle.populate(['assignedTo', 'assignedSite']);
+    
+    res.json({
+      success: true,
+      message: 'Vehicle updated successfully',
+      data: { vehicle }
+    });
+    
+  } catch (error) {
+    console.error('Update vehicle error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+    
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle number already exists'
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update vehicle'
+    });
+  }
+});
+
 // Update vehicle location
 router.put('/:id/location', authenticateToken, async (req, res) => {
   try {
@@ -352,6 +403,36 @@ router.get('/maintenance/due', authenticateToken, requirePermission('vehicle.rea
     res.status(500).json({
       success: false,
       message: 'Failed to fetch vehicles due for maintenance'
+    });
+  }
+});
+
+// Delete vehicle
+router.delete('/:id', authenticateToken, requirePermission('vehicle.delete'), async (req, res) => {
+  try {
+    const vehicle = await Vehicle.findById(req.params.id);
+    
+    if (!vehicle) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vehicle not found'
+      });
+    }
+    
+    // Soft delete - set isActive to false
+    vehicle.isActive = false;
+    await vehicle.save();
+    
+    res.json({
+      success: true,
+      message: 'Vehicle deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('Delete vehicle error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete vehicle'
     });
   }
 });
