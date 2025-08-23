@@ -99,10 +99,13 @@ app.use('*', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:8081'}`);
-  console.log(`🗄️  Database: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/construction_management'}`);
-});
+// Only start the server if this file is run directly (not imported)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:8081'}`);
+    console.log(`🗄️  Database: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/construction_management'}`);
+  });
+}
 
 module.exports = app;
