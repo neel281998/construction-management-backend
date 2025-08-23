@@ -15,6 +15,9 @@ const uploadRoutes = require('../routes/upload');
 
 const app = express();
 
+// Trust proxy for Vercel
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -33,7 +36,10 @@ app.use(cors({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  trustProxy: true
 });
 app.use(limiter);
 
@@ -42,7 +48,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/construction_management')
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/construction_management';
+mongoose.connect(mongoUri, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+})
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch(err => console.error('❌ MongoDB connection error:', err));
 
