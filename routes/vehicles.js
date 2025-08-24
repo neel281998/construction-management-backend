@@ -76,6 +76,34 @@ router.get('/', authenticateToken, requirePermission('vehicle.read'), async (req
   }
 });
 
+// Get vehicles requiring maintenance (specific route before /:id)
+router.get('/maintenance/due', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
+  try {
+    const today = new Date();
+    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    
+    const vehicles = await Vehicle.find({
+      isActive: true,
+      'maintenanceSchedule.nextService': { $lte: nextWeek }
+    })
+    .populate('assignedTo', 'firstName lastName')
+    .populate('assignedSite', 'name')
+    .sort({ 'maintenanceSchedule.nextService': 1 });
+    
+    res.json({
+      success: true,
+      data: { vehicles }
+    });
+    
+  } catch (error) {
+    console.error('Get maintenance due vehicles error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch vehicles due for maintenance'
+    });
+  }
+});
+
 // Get single vehicle
 router.get('/:id', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
   try {
@@ -142,58 +170,7 @@ router.post('/', authenticateToken, requirePermission('vehicle.create'), async (
   }
 });
 
-// Update vehicle
-router.put('/:id', authenticateToken, requirePermission('vehicle.update'), async (req, res) => {
-  try {
-    const vehicle = await Vehicle.findById(req.params.id);
-    
-    if (!vehicle) {
-      return res.status(404).json({
-        success: false,
-        message: 'Vehicle not found'
-      });
-    }
-    
-    // Update vehicle fields
-    Object.assign(vehicle, req.body);
-    await vehicle.save();
-    
-    // Populate references
-    await vehicle.populate(['assignedTo', 'assignedSite']);
-    
-    res.json({
-      success: true,
-      message: 'Vehicle updated successfully',
-      data: { vehicle }
-    });
-    
-  } catch (error) {
-    console.error('Update vehicle error:', error);
-    
-    if (error.name === 'ValidationError') {
-      const errors = Object.values(error.errors).map(err => err.message);
-      return res.status(400).json({
-        success: false,
-        message: 'Validation failed',
-        errors
-      });
-    }
-    
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: 'Vehicle number already exists'
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update vehicle'
-    });
-  }
-});
-
-// Update vehicle location
+// Update vehicle location (specific route before general /:id)
 router.put('/:id/location', authenticateToken, async (req, res) => {
   try {
     const { latitude, longitude, address } = req.body;
@@ -251,7 +228,7 @@ router.put('/:id/location', authenticateToken, async (req, res) => {
   }
 });
 
-// Update vehicle fuel level
+// Update vehicle fuel level (specific route before general /:id)
 router.put('/:id/fuel', authenticateToken, async (req, res) => {
   try {
     const { fuelLevel } = req.body;
@@ -294,7 +271,7 @@ router.put('/:id/fuel', authenticateToken, async (req, res) => {
   }
 });
 
-// Assign vehicle to site
+// Assign vehicle to site (specific route before general /:id)
 router.put('/:id/assign', authenticateToken, requirePermission('vehicle.update'), async (req, res) => {
   try {
     const { siteId, userId } = req.body;
@@ -337,7 +314,7 @@ router.put('/:id/assign', authenticateToken, requirePermission('vehicle.update')
   }
 });
 
-// Update vehicle status
+// Update vehicle status (specific route before general /:id)
 router.put('/:id/status', authenticateToken, requirePermission('vehicle.update'), async (req, res) => {
   try {
     const { status } = req.body;
@@ -379,30 +356,53 @@ router.put('/:id/status', authenticateToken, requirePermission('vehicle.update')
   }
 });
 
-// Get vehicles requiring maintenance
-router.get('/maintenance/due', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
+// Update vehicle (general route - must come after specific routes)
+router.put('/:id', authenticateToken, requirePermission('vehicle.update'), async (req, res) => {
   try {
-    const today = new Date();
-    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const vehicle = await Vehicle.findById(req.params.id);
     
-    const vehicles = await Vehicle.find({
-      isActive: true,
-      'maintenanceSchedule.nextService': { $lte: nextWeek }
-    })
-    .populate('assignedTo', 'firstName lastName')
-    .populate('assignedSite', 'name')
-    .sort({ 'maintenanceSchedule.nextService': 1 });
+    if (!vehicle) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vehicle not found'
+      });
+    }
+    
+    // Update vehicle fields
+    Object.assign(vehicle, req.body);
+    await vehicle.save();
+    
+    // Populate references
+    await vehicle.populate(['assignedTo', 'assignedSite']);
     
     res.json({
       success: true,
-      data: { vehicles }
+      message: 'Vehicle updated successfully',
+      data: { vehicle }
     });
     
   } catch (error) {
-    console.error('Get maintenance due vehicles error:', error);
+    console.error('Update vehicle error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+    
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle number already exists'
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch vehicles due for maintenance'
+      message: 'Failed to update vehicle'
     });
   }
 });
