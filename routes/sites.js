@@ -158,7 +158,157 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
   }
 });
 
-// Update site
+// Update site status (specific route before general /:id)
+router.put('/:id/status', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    
+    const site = await Site.findById(req.params.id);
+    
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check permissions
+    if (req.user.role !== 'admin' && site.siteManager.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    site.status = status;
+    
+    // Auto-set completion date if status is completed
+    if (status === 'completed' && !site.actualEndDate) {
+      site.actualEndDate = new Date();
+    }
+    
+    await site.save();
+    
+    res.json({
+      success: true,
+      message: 'Site status updated successfully',
+      data: {
+        siteId: site._id,
+        status: site.status,
+        actualEndDate: site.actualEndDate
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update site status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update site status'
+    });
+  }
+});
+
+// Update site manager (specific route before general /:id)
+router.put('/:id/manager', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { managerId } = req.body;
+    
+    if (!managerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Manager ID is required'
+      });
+    }
+    
+    const site = await Site.findById(req.params.id);
+    
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check permissions - only admin or current site manager can change
+    if (req.user.role !== 'admin' && site.siteManager.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    site.siteManager = managerId;
+    await site.save();
+    await site.populate('siteManager', 'firstName lastName email');
+    
+    res.json({
+      success: true,
+      message: 'Site manager updated successfully',
+      data: { site }
+    });
+    
+  } catch (error) {
+    console.error('Update site manager error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update site manager'
+    });
+  }
+});
+
+// Update site budget (specific route before general /:id)
+router.put('/:id/budget', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { budget, actualCost } = req.body;
+    
+    const site = await Site.findById(req.params.id);
+    
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check permissions
+    if (req.user.role !== 'admin' && site.siteManager.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    if (budget !== undefined) {
+      site.budget = budget;
+    }
+    
+    if (actualCost !== undefined) {
+      site.actualCost = actualCost;
+    }
+    
+    await site.save();
+    
+    res.json({
+      success: true,
+      message: 'Site budget updated successfully',
+      data: {
+        siteId: site._id,
+        budget: site.budget,
+        actualCost: site.actualCost,
+        costVariance: site.budget - site.actualCost
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update site budget error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update site budget'
+    });
+  }
+});
+
+// Update site (general route - must come after specific routes)
 router.put('/:id', authenticateToken, requirePermission('site.update'), async (req, res) => {
   try {
     const site = await Site.findById(req.params.id);
@@ -178,16 +328,17 @@ router.put('/:id', authenticateToken, requirePermission('site.update'), async (r
       });
     }
     
-    const updatedSite = await Site.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('siteManager', 'firstName lastName email');
+    // Update site fields
+    Object.assign(site, req.body);
+    await site.save();
+    
+    // Populate references
+    await site.populate(['siteManager', 'assignedStaff.user', 'assignedVehicles.vehicle']);
     
     res.json({
       success: true,
       message: 'Site updated successfully',
-      data: { site: updatedSite }
+      data: { site }
     });
     
   } catch (error) {

@@ -309,14 +309,12 @@ router.get('/meta/categories', authenticateToken, requirePermission('inventory.r
   }
 });
 
-// Update inventory item
-router.put('/:id', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+// Update inventory stock levels (specific route before general /:id)
+router.put('/:id/stock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
-    const item = await Inventory.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const { currentStock, minimumStock } = req.body;
+    
+    const item = await Inventory.findById(req.params.id);
     
     if (!item) {
       return res.status(404).json({
@@ -324,6 +322,162 @@ router.put('/:id', authenticateToken, requirePermission('inventory.update'), asy
         message: 'Inventory item not found'
       });
     }
+    
+    if (currentStock !== undefined) {
+      if (currentStock < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current stock cannot be negative'
+        });
+      }
+      item.currentStock = currentStock;
+    }
+    
+    if (minimumStock !== undefined) {
+      if (minimumStock < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Minimum stock cannot be negative'
+        });
+      }
+      item.minimumStock = minimumStock;
+    }
+    
+    await item.save();
+    
+    res.json({
+      success: true,
+      message: 'Stock levels updated successfully',
+      data: {
+        itemId: item._id,
+        currentStock: item.currentStock,
+        minimumStock: item.minimumStock,
+        isLowStock: item.isLowStock
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update stock levels error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update stock levels'
+    });
+  }
+});
+
+// Update inventory pricing (specific route before general /:id)
+router.put('/:id/pricing', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const { unitPrice, costPrice } = req.body;
+    
+    const item = await Inventory.findById(req.params.id);
+    
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inventory item not found'
+      });
+    }
+    
+    if (unitPrice !== undefined) {
+      if (unitPrice < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Unit price cannot be negative'
+        });
+      }
+      item.unitPrice = unitPrice;
+    }
+    
+    if (costPrice !== undefined) {
+      if (costPrice < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cost price cannot be negative'
+        });
+      }
+      item.costPrice = costPrice;
+    }
+    
+    await item.save();
+    
+    res.json({
+      success: true,
+      message: 'Pricing updated successfully',
+      data: {
+        itemId: item._id,
+        unitPrice: item.unitPrice,
+        costPrice: item.costPrice,
+        profitMargin: item.unitPrice - item.costPrice
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update pricing error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update pricing'
+    });
+  }
+});
+
+// Update inventory supplier (specific route before general /:id)
+router.put('/:id/supplier', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const { supplier } = req.body;
+    
+    if (!supplier || !supplier.name) {
+      return res.status(400).json({
+        success: false,
+        message: 'Supplier name is required'
+      });
+    }
+    
+    const item = await Inventory.findById(req.params.id);
+    
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inventory item not found'
+      });
+    }
+    
+    item.supplier = supplier;
+    await item.save();
+    
+    res.json({
+      success: true,
+      message: 'Supplier updated successfully',
+      data: {
+        itemId: item._id,
+        supplier: item.supplier
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update supplier error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update supplier'
+    });
+  }
+});
+
+// Update inventory item (general route - must come after specific routes)
+router.put('/:id', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const item = await Inventory.findById(req.params.id);
+    
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inventory item not found'
+      });
+    }
+    
+    // Update item fields
+    Object.assign(item, req.body);
+    await item.save();
     
     res.json({
       success: true,
@@ -340,6 +494,13 @@ router.put('/:id', authenticateToken, requirePermission('inventory.update'), asy
         success: false,
         message: 'Validation failed',
         errors
+      });
+    }
+    
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item code already exists'
       });
     }
     
