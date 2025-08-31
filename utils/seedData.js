@@ -16,7 +16,9 @@ const seedData = async () => {
       User.deleteMany({}),
       Site.deleteMany({}),
       Vehicle.deleteMany({}),
-      Inventory.deleteMany({})
+      Inventory.deleteMany({}),
+      Step.deleteMany({}),
+      Stock.deleteMany({})
     ]);
     console.log('Cleared existing data...');
     
@@ -82,10 +84,11 @@ const seedData = async () => {
     await inventoryManager.save();
     console.log('Created users...');
     
-    // Create sites
+    // Create sites with new site types
     const site1 = new Site({
-      name: 'Downtown Office Complex',
-      description: 'Modern office building construction',
+      name: 'Main Highway BT Road',
+      siteType: 'BT_ROAD',
+      description: 'Bituminous road construction on main highway',
       address: {
         street: '123 Business Ave',
         city: 'New York',
@@ -101,6 +104,9 @@ const seedData = async () => {
       expectedEndDate: new Date('2024-06-30'),
       budget: 1500000,
       currentCost: 950000,
+      estimatedVolumeM3: 680,
+      totalProgressM3: 442,
+      currentStep: 3,
       siteManager: siteManager._id,
       progress: 65,
       assignedStaff: [
@@ -111,8 +117,9 @@ const seedData = async () => {
     await site1.save();
     
     const site2 = new Site({
-      name: 'Residential Tower A',
-      description: 'Luxury residential tower construction',
+      name: 'City Bridge Construction',
+      siteType: 'BRIDGE',
+      description: 'Major bridge construction over river',
       address: {
         street: '456 Housing St',
         city: 'Brooklyn',
@@ -128,6 +135,9 @@ const seedData = async () => {
       expectedEndDate: new Date('2024-04-15'),
       budget: 2200000,
       currentCost: 1870000,
+      estimatedVolumeM3: 1650,
+      totalProgressM3: 1402.5,
+      currentStep: 4,
       siteManager: siteManager._id,
       progress: 85,
       assignedStaff: [
@@ -135,20 +145,74 @@ const seedData = async () => {
       ]
     });
     await site2.save();
+    
+    const site3 = new Site({
+      name: 'Residential CC Road',
+      siteType: 'CC_ROAD',
+      description: 'Cement concrete road in residential area',
+      address: {
+        street: '789 Residential Blvd',
+        city: 'Queens',
+        state: 'NY',
+        zipCode: '11375',
+        coordinates: {
+          latitude: 40.7282,
+          longitude: -73.7949
+        }
+      },
+      status: 'planning',
+      startDate: new Date('2024-03-01'),
+      expectedEndDate: new Date('2024-08-30'),
+      budget: 800000,
+      currentCost: 0,
+      estimatedVolumeM3: 750,
+      totalProgressM3: 0,
+      currentStep: 1,
+      siteManager: siteManager._id,
+      progress: 0
+    });
+    await site3.save();
+    
+    const site4 = new Site({
+      name: 'Storm Drainage System',
+      siteType: 'DRAINAGE',
+      description: 'Storm water drainage system construction',
+      address: {
+        street: '321 Industrial Park',
+        city: 'Bronx',
+        state: 'NY',
+        zipCode: '10451',
+        coordinates: {
+          latitude: 40.8448,
+          longitude: -73.8648
+        }
+      },
+      status: 'active',
+      startDate: new Date('2024-02-01'),
+      expectedEndDate: new Date('2024-05-30'),
+      budget: 500000,
+      currentCost: 250000,
+      estimatedVolumeM3: 390,
+      totalProgressM3: 195,
+      currentStep: 2,
+      siteManager: siteManager._id,
+      progress: 50
+    });
+    await site4.save();
     console.log('Created sites...');
     
     // Update user assigned sites
     await User.findByIdAndUpdate(siteManager._id, {
-      assignedSites: [site1._id, site2._id]
+      assignedSites: [site1._id, site2._id, site3._id, site4._id]
     });
     await User.findByIdAndUpdate(worker1._id, {
-      assignedSites: [site1._id, site2._id]
+      assignedSites: [site1._id, site2._id, site4._id]
     });
     await User.findByIdAndUpdate(worker2._id, {
-      assignedSites: [site1._id]
+      assignedSites: [site1._id, site3._id]
     });
     
-    // Create vehicles
+    // Create vehicles with capacity
     const vehicles = [
       {
         vehicleNumber: 'TR-001',
@@ -160,12 +224,18 @@ const seedData = async () => {
         currentLocation: {
           latitude: 40.7128,
           longitude: -74.0060,
-          address: 'Downtown Office Complex, New York, NY',
+          address: 'Main Highway BT Road, New York, NY',
           lastUpdated: new Date()
         },
         assignedSite: site1._id,
         assignedTo: worker1._id,
         fuelLevel: 85,
+        specifications: {
+          engineType: 'Diesel',
+          fuelCapacity: 400,
+          maxLoad: 25000,
+          capacityM3: 15
+        },
         maintenanceSchedule: {
           nextService: new Date('2024-02-15'),
           lastService: new Date('2023-11-15'),
@@ -186,6 +256,12 @@ const seedData = async () => {
           lastUpdated: new Date()
         },
         fuelLevel: 92,
+        specifications: {
+          engineType: 'Diesel',
+          fuelCapacity: 300,
+          maxLoad: 20000,
+          capacityM3: 1.2
+        },
         maintenanceSchedule: {
           nextService: new Date('2024-03-01'),
           lastService: new Date('2023-12-01'),
@@ -206,10 +282,68 @@ const seedData = async () => {
           lastUpdated: new Date()
         },
         fuelLevel: 45,
+        specifications: {
+          engineType: 'Diesel',
+          fuelCapacity: 500,
+          maxLoad: 50000,
+          capacityM3: 0
+        },
         maintenanceSchedule: {
           nextService: new Date('2024-01-20'),
           lastService: new Date('2023-10-20'),
           mileage: 28000
+        }
+      },
+      {
+        vehicleNumber: 'DT-004',
+        type: 'dump_truck',
+        brand: 'Tata',
+        model: 'LPK 2518',
+        year: 2023,
+        status: 'available',
+        currentLocation: {
+          latitude: 40.8448,
+          longitude: -73.8648,
+          address: 'Storm Drainage System, Bronx, NY',
+          lastUpdated: new Date()
+        },
+        fuelLevel: 78,
+        specifications: {
+          engineType: 'Diesel',
+          fuelCapacity: 200,
+          maxLoad: 18000,
+          capacityM3: 12
+        },
+        maintenanceSchedule: {
+          nextService: new Date('2024-04-01'),
+          lastService: new Date('2024-01-01'),
+          mileage: 15000
+        }
+      },
+      {
+        vehicleNumber: 'MX-005',
+        type: 'mixer',
+        brand: 'Schwing',
+        model: 'SPM 5000',
+        year: 2022,
+        status: 'available',
+        currentLocation: {
+          latitude: 40.7282,
+          longitude: -73.7949,
+          address: 'Residential CC Road, Queens, NY',
+          lastUpdated: new Date()
+        },
+        fuelLevel: 90,
+        specifications: {
+          engineType: 'Diesel',
+          fuelCapacity: 350,
+          maxLoad: 12000,
+          capacityM3: 8
+        },
+        maintenanceSchedule: {
+          nextService: new Date('2024-03-15'),
+          lastService: new Date('2023-12-15'),
+          mileage: 22000
         }
       }
     ];
@@ -313,6 +447,167 @@ const seedData = async () => {
     
     await Inventory.insertMany(inventoryItems);
     console.log('Created inventory items...');
+    
+    // Create steps for existing sites
+    const Step = require('../models/Step');
+    const { getStepsForSiteType } = require('../config/siteTypes');
+    
+    // Create steps for BT Road site
+    const btRoadSteps = getStepsForSiteType('BT_ROAD');
+    const btRoadStepPromises = btRoadSteps.map((stepConfig, index) => {
+      const progressM3 = index < 3 ? stepConfig.defaultVolumeM3 * 0.65 : 0; // First 3 steps 65% complete
+      const status = index < 3 ? 'completed' : (index === 3 ? 'in_progress' : 'pending');
+      
+      return new Step({
+        siteId: site1._id,
+        stepNumber: stepConfig.stepNumber,
+        stepName: stepConfig.stepName,
+        primaryStock: stepConfig.primaryStock,
+        secondaryStock: stepConfig.secondaryStock,
+        estimatedVolumeM3: stepConfig.defaultVolumeM3,
+        progressM3,
+        status,
+        startDate: index < 3 ? new Date('2024-01-01') : null,
+        completedDate: index < 2 ? new Date('2024-01-15') : null
+      }).save();
+    });
+    await Promise.all(btRoadStepPromises);
+    
+    // Create steps for Bridge site
+    const bridgeSteps = getStepsForSiteType('BRIDGE');
+    const bridgeStepPromises = bridgeSteps.map((stepConfig, index) => {
+      const progressM3 = index < 4 ? stepConfig.defaultVolumeM3 * 0.85 : 0; // First 4 steps 85% complete
+      const status = index < 4 ? 'completed' : 'pending';
+      
+      return new Step({
+        siteId: site2._id,
+        stepNumber: stepConfig.stepNumber,
+        stepName: stepConfig.stepName,
+        primaryStock: stepConfig.primaryStock,
+        secondaryStock: stepConfig.secondaryStock,
+        estimatedVolumeM3: stepConfig.defaultVolumeM3,
+        progressM3,
+        status,
+        startDate: index < 4 ? new Date('2023-09-01') : null,
+        completedDate: index < 4 ? new Date('2024-01-20') : null
+      }).save();
+    });
+    await Promise.all(bridgeStepPromises);
+    
+    // Create steps for CC Road site (planning stage)
+    const ccRoadSteps = getStepsForSiteType('CC_ROAD');
+    const ccRoadStepPromises = ccRoadSteps.map(stepConfig => {
+      return new Step({
+        siteId: site3._id,
+        stepNumber: stepConfig.stepNumber,
+        stepName: stepConfig.stepName,
+        primaryStock: stepConfig.primaryStock,
+        secondaryStock: stepConfig.secondaryStock,
+        estimatedVolumeM3: stepConfig.defaultVolumeM3,
+        progressM3: 0,
+        status: 'pending'
+      }).save();
+    });
+    await Promise.all(ccRoadStepPromises);
+    
+    // Create steps for Drainage site
+    const drainageSteps = getStepsForSiteType('DRAINAGE');
+    const drainageStepPromises = drainageSteps.map((stepConfig, index) => {
+      const progressM3 = index < 2 ? stepConfig.defaultVolumeM3 * 0.5 : 0; // First 2 steps 50% complete
+      const status = index < 2 ? 'in_progress' : 'pending';
+      
+      return new Step({
+        siteId: site4._id,
+        stepNumber: stepConfig.stepNumber,
+        stepName: stepConfig.stepName,
+        primaryStock: stepConfig.primaryStock,
+        secondaryStock: stepConfig.secondaryStock,
+        estimatedVolumeM3: stepConfig.defaultVolumeM3,
+        progressM3,
+        status,
+        startDate: index < 2 ? new Date('2024-02-01') : null
+      }).save();
+    });
+    await Promise.all(drainageStepPromises);
+    
+    console.log('Created steps for all sites...');
+    
+    // Create sample stock consumption data
+    const Stock = require('../models/Stock');
+    
+    // Get step IDs for stock creation
+    const btRoadStep1 = await Step.findOne({ siteId: site1._id, stepNumber: 1 });
+    const bridgeStep1 = await Step.findOne({ siteId: site2._id, stepNumber: 1 });
+    const drainageStep1 = await Step.findOne({ siteId: site4._id, stepNumber: 1 });
+    
+    const sampleStocks = [
+      // BT Road - Site Clearing
+      {
+        siteId: site1._id,
+        stepId: btRoadStep1._id,
+        stockType: 'primary',
+        materialName: 'Excavator',
+        quantityM3: 65,
+        unitPrice: 150,
+        supplier: 'Heavy Equipment Co',
+        date: new Date('2024-01-05')
+      },
+      {
+        siteId: site1._id,
+        stepId: btRoadStep1._id,
+        stockType: 'secondary',
+        materialName: 'Dump Soil',
+        quantityM3: 100,
+        unitPrice: 25,
+        supplier: 'Soil Suppliers Ltd',
+        date: new Date('2024-01-05')
+      },
+      // Bridge - Foundation
+      {
+        siteId: site2._id,
+        stepId: bridgeStep1._id,
+        stockType: 'primary',
+        materialName: 'Cement',
+        quantityM3: 255,
+        unitPrice: 85,
+        supplier: 'Cement Corp',
+        date: new Date('2023-09-10')
+      },
+      {
+        siteId: site2._id,
+        stepId: bridgeStep1._id,
+        stockType: 'secondary',
+        materialName: 'Steel',
+        quantityM3: 45,
+        unitPrice: 120,
+        supplier: 'Steel Works Inc',
+        date: new Date('2023-09-10')
+      },
+      // Drainage - Excavation
+      {
+        siteId: site4._id,
+        stepId: drainageStep1._id,
+        stockType: 'primary',
+        materialName: 'Excavator',
+        quantityM3: 40,
+        unitPrice: 150,
+        supplier: 'Heavy Equipment Co',
+        date: new Date('2024-02-05')
+      },
+      {
+        siteId: site4._id,
+        stepId: drainageStep1._id,
+        stockType: 'secondary',
+        materialName: 'Dump Soil',
+        quantityM3: 40,
+        unitPrice: 25,
+        supplier: 'Soil Suppliers Ltd',
+        date: new Date('2024-02-05')
+      }
+    ];
+    
+    await Stock.insertMany(sampleStocks);
+    console.log('Created sample stock consumption data...');
     
     console.log('✅ Seed data created successfully!');
     console.log('\n📋 Demo Credentials:');

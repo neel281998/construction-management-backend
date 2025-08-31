@@ -12,6 +12,9 @@ const vehicleRoutes = require('./routes/vehicles');
 const inventoryRoutes = require('./routes/inventory');
 const attendanceRoutes = require('./routes/attendance');
 const uploadRoutes = require('./routes/upload');
+const siteTypeRoutes = require('./routes/siteTypes');
+const stepRoutes = require('./routes/steps');
+const stockRoutes = require('./routes/stocks');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -71,6 +74,9 @@ app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/site-types', siteTypeRoutes);
+app.use('/api/steps', stepRoutes);
+app.use('/api/stocks', stockRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

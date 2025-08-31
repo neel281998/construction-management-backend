@@ -7,6 +7,14 @@ const siteSchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'Site name cannot exceed 100 characters']
   },
+  siteType: {
+    type: String,
+    enum: {
+      values: ['BT_ROAD', 'CC_ROAD', 'BRIDGE', 'DRAINAGE'],
+      message: 'Invalid site type'
+    },
+    required: [true, 'Site type is required']
+  },
   description: {
     type: String,
     trim: true,
@@ -141,6 +149,21 @@ const siteSchema = new mongoose.Schema({
     min: [0, 'Progress cannot be negative'],
     max: [100, 'Progress cannot exceed 100'],
     default: 0
+  },
+  totalProgressM3: {
+    type: Number,
+    default: 0,
+    min: [0, 'Total progress cannot be negative']
+  },
+  estimatedVolumeM3: {
+    type: Number,
+    required: [true, 'Estimated volume is required'],
+    min: [0, 'Estimated volume cannot be negative']
+  },
+  currentStep: {
+    type: Number,
+    default: 1,
+    min: [1, 'Current step must be at least 1']
   },
   milestones: [{
     name: String,

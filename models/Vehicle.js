@@ -106,6 +106,7 @@ const vehicleSchema = new mongoose.Schema({
     engineType: String,
     fuelCapacity: Number, // in liters
     maxLoad: Number, // in kg
+    capacityM3: Number, // in cubic meters
     dimensions: {
       length: Number,
       width: Number,

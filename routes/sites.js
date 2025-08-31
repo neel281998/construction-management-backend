@@ -119,23 +119,122 @@ router.get('/:id', authenticateToken, requirePermission('site.read'), async (req
   }
 });
 
+// Get site with detailed progress and steps
+router.get('/:id/progress', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const site = await Site.findById(req.params.id)
+      .populate('siteManager', 'firstName lastName email phone')
+      .populate('assignedStaff.user', 'firstName lastName role email phone')
+      .populate('assignedVehicles.vehicle', 'vehicleNumber type brand model status');
+    
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check access permissions
+    if (req.user.role !== 'admin' && 
+        site.siteManager.toString() !== req.user._id.toString() &&
+        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    // Get steps for the site
+    const Step = require('../models/Step');
+    const steps = await Step.find({ siteId: site._id, isActive: true })
+      .sort({ stepNumber: 1 });
+    
+    // Calculate step-wise progress
+    const stepProgress = steps.map(step => ({
+      ...step.toObject(),
+      progressPercentage: step.estimatedVolumeM3 > 0 
+        ? Math.round((step.progressM3 / step.estimatedVolumeM3) * 100) 
+        : 0,
+      remainingVolumeM3: Math.max(0, step.estimatedVolumeM3 - step.progressM3)
+    }));
+    
+    // Calculate overall progress
+    const totalEstimatedM3 = steps.reduce((sum, step) => sum + step.estimatedVolumeM3, 0);
+    const totalProgressM3 = steps.reduce((sum, step) => sum + step.progressM3, 0);
+    const overallProgressPercentage = totalEstimatedM3 > 0 
+      ? Math.round((totalProgressM3 / totalEstimatedM3) * 100) 
+      : 0;
+    
+    res.json({
+      success: true,
+      data: { 
+        site,
+        steps: stepProgress,
+        progress: {
+          totalEstimatedM3,
+          totalProgressM3,
+          overallProgressPercentage,
+          currentStep: site.currentStep
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get site progress error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch site progress'
+    });
+  }
+});
+
 // Create new site
 router.post('/', authenticateToken, requirePermission('site.create'), async (req, res) => {
   try {
+    const { 
+      name, 
+      siteType, 
+      description, 
+      address, 
+      startDate, 
+      expectedEndDate, 
+      budget, 
+      estimatedVolumeM3,
+      siteManagerId 
+    } = req.body;
+    
+    // Validate site type
+    if (!['BT_ROAD', 'CC_ROAD', 'BRIDGE', 'DRAINAGE'].includes(siteType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid site type'
+      });
+    }
+    
     const siteData = {
-      ...req.body,
-      siteManager: req.body.siteManagerId || req.user._id
+      name,
+      siteType,
+      description,
+      address,
+      startDate,
+      expectedEndDate,
+      budget,
+      estimatedVolumeM3,
+      siteManager: siteManagerId || req.user._id
     };
     
     const site = new Site(siteData);
     await site.save();
+    
+    // Create steps for the site
+    await createStepsForSite(site._id, siteType, estimatedVolumeM3);
     
     // Populate the response
     await site.populate('siteManager', 'firstName lastName email');
     
     res.status(201).json({
       success: true,
-      message: 'Site created successfully',
+      message: 'Site created successfully with steps',
       data: { site }
     });
     
@@ -157,6 +256,38 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     });
   }
 });
+
+// Helper function to create steps for a site
+async function createStepsForSite(siteId, siteType, totalVolumeM3) {
+  try {
+    const { getStepsForSiteType } = require('../config/siteTypes');
+    const steps = getStepsForSiteType(siteType);
+    
+    const Step = require('../models/Step');
+    const stepPromises = steps.map(stepConfig => {
+      // Calculate proportional volume for each step
+      const totalDefaultVolume = steps.reduce((sum, step) => sum + step.defaultVolumeM3, 0);
+      const proportionalVolume = (stepConfig.defaultVolumeM3 / totalDefaultVolume) * totalVolumeM3;
+      
+      const step = new Step({
+        siteId,
+        stepNumber: stepConfig.stepNumber,
+        stepName: stepConfig.stepName,
+        primaryStock: stepConfig.primaryStock,
+        secondaryStock: stepConfig.secondaryStock,
+        estimatedVolumeM3: Math.round(proportionalVolume * 100) / 100, // Round to 2 decimal places
+        status: 'pending'
+      });
+      
+      return step.save();
+    });
+    
+    await Promise.all(stepPromises);
+  } catch (error) {
+    console.error('Error creating steps for site:', error);
+    throw error;
+  }
+}
 
 // Update site status (specific route before general /:id)
 router.put('/:id/status', authenticateToken, requirePermission('site.update'), async (req, res) => {
