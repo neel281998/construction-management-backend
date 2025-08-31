@@ -4,7 +4,7 @@ const { authenticateToken, requirePermission } = require('../middleware/auth');
 const { getSiteTypes, getStepsForSiteType } = require('../config/siteTypes');
 
 // Get all available site types
-router.get('/', authenticateToken, requirePermission('site.read'), async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const siteTypes = getSiteTypes();
     
@@ -24,7 +24,7 @@ router.get('/', authenticateToken, requirePermission('site.read'), async (req, r
 });
 
 // Get configuration for a specific site type
-router.get('/:siteType', authenticateToken, requirePermission('site.read'), async (req, res) => {
+router.get('/:siteType', async (req, res) => {
   try {
     const { siteType } = req.params;
     
