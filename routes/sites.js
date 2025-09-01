@@ -1,5 +1,6 @@
 const express = require('express');
 const Site = require('../models/Site');
+const Step = require('../models/Step');
 const { authenticateToken, requirePermission, canAccessSite } = require('../middleware/auth');
 
 const router = express.Router();
@@ -263,7 +264,6 @@ async function createStepsForSite(siteId, siteType, totalVolumeM3) {
     const { getStepsForSiteType } = require('../config/siteTypes');
     const steps = getStepsForSiteType(siteType);
     
-    const Step = require('../models/Step');
     const stepPromises = steps.map(stepConfig => {
       // Calculate proportional volume for each step
       const totalDefaultVolume = steps.reduce((sum, step) => sum + step.defaultVolumeM3, 0);
