@@ -15,9 +15,14 @@ const siteInventorySchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  materialCategory: {
+    type: String,
+    enum: ['aggregates', 'cement_concrete', 'steel_reinforcement', 'timber_wood', 'tools_equipment', 'finishing_materials', 'other'],
+    required: true
+  },
   materialType: {
     type: String,
-    enum: ['primary', 'secondary'],
+    enum: ['primary', 'secondary', 'auxiliary'],
     required: true
   },
   quantity: {
@@ -28,15 +33,41 @@ const siteInventorySchema = new mongoose.Schema({
   unit: {
     type: String,
     default: 'm³',
-    enum: ['m³', 'kg', 'liters', 'pieces', 'tons']
+    enum: ['m³', 'kg', 'liters', 'pieces', 'tons', 'sq.m', 'linear.m', 'bags', 'bundles']
   },
-  estimatedCost: {
+  unitPrice: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  totalCost: {
     type: Number,
     default: 0,
     min: 0
   },
   supplier: {
-    type: String
+    name: String,
+    contact: String,
+    address: String,
+    phone: String,
+    email: String
+  },
+  specifications: {
+    grade: String,
+    quality: String,
+    brand: String,
+    model: String,
+    size: String
+  },
+  status: {
+    type: String,
+    enum: ['available', 'low_stock', 'out_of_stock', 'ordered', 'received'],
+    default: 'available'
+  },
+  reorderLevel: {
+    type: Number,
+    default: 0,
+    min: 0
   },
   notes: {
     type: String
@@ -44,6 +75,15 @@ const siteInventorySchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  addedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  lastUpdatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }
 }, {
   timestamps: true
@@ -53,5 +93,15 @@ const siteInventorySchema = new mongoose.Schema({
 siteInventorySchema.index({ siteId: 1, stepId: 1 });
 siteInventorySchema.index({ siteId: 1, materialName: 1 });
 siteInventorySchema.index({ materialType: 1 });
+siteInventorySchema.index({ materialCategory: 1 });
+siteInventorySchema.index({ status: 1 });
+
+// Pre-save middleware to calculate total cost
+siteInventorySchema.pre('save', function(next) {
+  if (this.quantity && this.unitPrice) {
+    this.totalCost = this.quantity * this.unitPrice;
+  }
+  next();
+});
 
 module.exports = mongoose.model('SiteInventory', siteInventorySchema);
