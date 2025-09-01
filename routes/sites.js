@@ -1,6 +1,7 @@
 const express = require('express');
 const Site = require('../models/Site');
 const Step = require('../models/Step');
+const SiteInventory = require('../models/SiteInventory');
 const { authenticateToken, requirePermission, canAccessSite } = require('../middleware/auth');
 
 const router = express.Router();
@@ -228,7 +229,10 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     await site.save();
     
     // Create steps for the site
-    await createStepsForSite(site._id, siteType, estimatedVolumeM3);
+    const steps = await createStepsForSite(site._id, siteType, estimatedVolumeM3);
+    
+    // Create inventory items for each step
+    await createSiteInventory(site._id, steps);
     
     // Populate the response
     await site.populate('siteManager', 'firstName lastName email');
@@ -282,9 +286,54 @@ async function createStepsForSite(siteId, siteType, totalVolumeM3) {
       return step.save();
     });
     
-    await Promise.all(stepPromises);
+    const createdSteps = await Promise.all(stepPromises);
+    return createdSteps;
   } catch (error) {
     console.error('Error creating steps for site:', error);
+    throw error;
+  }
+}
+
+// Helper function to create inventory items for a site
+async function createSiteInventory(siteId, steps) {
+  try {
+    const inventoryPromises = [];
+    
+    steps.forEach(step => {
+      // Create primary stock inventory item
+      if (step.primaryStock) {
+        const primaryInventory = new SiteInventory({
+          siteId,
+          stepId: step._id,
+          materialName: step.primaryStock,
+          materialType: 'primary',
+          quantity: step.estimatedVolumeM3,
+          unit: 'm³',
+          estimatedCost: 0, // Will be updated later
+          notes: `Primary material for ${step.stepName}`
+        });
+        inventoryPromises.push(primaryInventory.save());
+      }
+      
+      // Create secondary stock inventory item
+      if (step.secondaryStock) {
+        const secondaryInventory = new SiteInventory({
+          siteId,
+          stepId: step._id,
+          materialName: step.secondaryStock,
+          materialType: 'secondary',
+          quantity: step.estimatedVolumeM3 * 0.3, // Secondary materials usually 30% of primary
+          unit: 'm³',
+          estimatedCost: 0, // Will be updated later
+          notes: `Secondary material for ${step.stepName}`
+        });
+        inventoryPromises.push(secondaryInventory.save());
+      }
+    });
+    
+    await Promise.all(inventoryPromises);
+  } catch (error) {
+    console.error('Error creating site inventory:', error);
     throw error;
   }
 }

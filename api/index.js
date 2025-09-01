@@ -14,7 +14,7 @@ const attendanceRoutes = require('../routes/attendance');
 const uploadRoutes = require('../routes/upload');
 const siteTypeRoutes = require('../routes/siteTypes');
 const stepRoutes = require('../routes/steps');
-// const stockRoutes = require('../routes/stocks');
+const siteInventoryRoutes = require('../routes/siteInventory');
 
 const app = express();
 
@@ -77,7 +77,7 @@ app.get('/', (req, res) => {
       upload: '/api/upload',
       siteTypes: '/api/site-types',
       steps: '/api/steps',
-      // stocks: '/api/stocks'
+      siteInventory: '/api/site-inventory'
     }
   });
 });
@@ -92,7 +92,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/site-types', siteTypeRoutes);
 app.use('/api/steps', stepRoutes);
-// app.use('/api/stocks', stockRoutes);
+app.use('/api/site-inventory', siteInventoryRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
