@@ -102,8 +102,7 @@ const seedData = async () => {
       status: 'active',
       startDate: new Date('2024-01-01'),
       expectedEndDate: new Date('2024-06-30'),
-      budget: 1500000,
-      currentCost: 950000,
+
       estimatedVolumeM3: 680,
       totalProgressM3: 442,
       currentStep: 3,
@@ -133,8 +132,7 @@ const seedData = async () => {
       status: 'active',
       startDate: new Date('2023-09-01'),
       expectedEndDate: new Date('2024-04-15'),
-      budget: 2200000,
-      currentCost: 1870000,
+
       estimatedVolumeM3: 1650,
       totalProgressM3: 1402.5,
       currentStep: 4,
@@ -163,8 +161,7 @@ const seedData = async () => {
       status: 'planning',
       startDate: new Date('2024-03-01'),
       expectedEndDate: new Date('2024-08-30'),
-      budget: 800000,
-      currentCost: 0,
+
       estimatedVolumeM3: 750,
       totalProgressM3: 0,
       currentStep: 1,
@@ -190,8 +187,7 @@ const seedData = async () => {
       status: 'active',
       startDate: new Date('2024-02-01'),
       expectedEndDate: new Date('2024-05-30'),
-      budget: 500000,
-      currentCost: 250000,
+
       estimatedVolumeM3: 390,
       totalProgressM3: 195,
       currentStep: 2,
@@ -362,7 +358,7 @@ const seedData = async () => {
         currentStock: 50,
         minimumStock: 100,
         maximumStock: 500,
-        unitPrice: 12.50,
+
         supplier: {
           name: 'ABC Building Supplies',
           contact: '+1-555-0101',
@@ -380,7 +376,7 @@ const seedData = async () => {
         currentStock: 250,
         minimumStock: 100,
         maximumStock: 400,
-        unitPrice: 8.75,
+
         supplier: {
           name: 'Steel Works Inc',
           contact: '+1-555-0202',
@@ -398,7 +394,7 @@ const seedData = async () => {
         currentStock: 25,
         minimumStock: 50,
         maximumStock: 200,
-        unitPrice: 15.99,
+
         supplier: {
           name: 'Safety First Co',
           contact: '+1-555-0303',
@@ -416,7 +412,7 @@ const seedData = async () => {
         currentStock: 800,
         minimumStock: 200,
         maximumStock: 1000,
-        unitPrice: 2.25,
+
         supplier: {
           name: 'Block Masters',
           contact: '+1-555-0404',
@@ -434,7 +430,7 @@ const seedData = async () => {
         currentStock: 15,
         minimumStock: 20,
         maximumStock: 100,
-        unitPrice: 25.50,
+
         supplier: {
           name: 'Color Pro Paints',
           contact: '+1-555-0505',
@@ -548,7 +544,6 @@ const seedData = async () => {
         stockType: 'primary',
         materialName: 'Excavator',
         quantityM3: 65,
-        unitPrice: 150,
         supplier: 'Heavy Equipment Co',
         date: new Date('2024-01-05')
       },
@@ -558,7 +553,6 @@ const seedData = async () => {
         stockType: 'secondary',
         materialName: 'Dump Soil',
         quantityM3: 100,
-        unitPrice: 25,
         supplier: 'Soil Suppliers Ltd',
         date: new Date('2024-01-05')
       },
@@ -569,7 +563,6 @@ const seedData = async () => {
         stockType: 'primary',
         materialName: 'Cement',
         quantityM3: 255,
-        unitPrice: 85,
         supplier: 'Cement Corp',
         date: new Date('2023-09-10')
       },
@@ -579,7 +572,6 @@ const seedData = async () => {
         stockType: 'secondary',
         materialName: 'Steel',
         quantityM3: 45,
-        unitPrice: 120,
         supplier: 'Steel Works Inc',
         date: new Date('2023-09-10')
       },
@@ -590,7 +582,6 @@ const seedData = async () => {
         stockType: 'primary',
         materialName: 'Excavator',
         quantityM3: 40,
-        unitPrice: 150,
         supplier: 'Heavy Equipment Co',
         date: new Date('2024-02-05')
       },
@@ -600,7 +591,6 @@ const seedData = async () => {
         stockType: 'secondary',
         materialName: 'Dump Soil',
         quantityM3: 40,
-        unitPrice: 25,
         supplier: 'Soil Suppliers Ltd',
         date: new Date('2024-02-05')
       }

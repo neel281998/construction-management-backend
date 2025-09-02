@@ -68,11 +68,7 @@ const inventorySchema = new mongoose.Schema({
       message: 'Maximum stock must be greater than or equal to minimum stock'
     }
   },
-  unitPrice: {
-    type: Number,
-    required: [true, 'Unit price is required'],
-    min: [0, 'Unit price cannot be negative']
-  },
+
   supplier: {
     name: {
       type: String,
@@ -112,15 +108,7 @@ const inventorySchema = new mongoose.Schema({
       required: true,
       min: [0, 'Restock quantity must be positive']
     },
-    unitPrice: {
-      type: Number,
-      required: true,
-      min: [0, 'Unit price must be positive']
-    },
-    totalCost: {
-      type: Number,
-      required: true
-    },
+
     supplier: {
       type: String,
       required: true
@@ -171,28 +159,20 @@ inventorySchema.virtual('stockPercentage').get(function() {
   return this.maximumStock > 0 ? Math.round((this.currentStock / this.maximumStock) * 100) : 0;
 });
 
-// Virtual for total value
-inventorySchema.virtual('totalValue').get(function() {
-  return this.currentStock * this.unitPrice;
-});
+
 
 // Method to restock item
-inventorySchema.methods.restock = function(quantity, unitPrice, supplier, restockedBy, notes = '') {
-  const totalCost = quantity * unitPrice;
-  
+inventorySchema.methods.restock = function(quantity, supplier, restockedBy, notes = '') {
   // Add to restock history
   this.restockHistory.push({
     quantity,
-    unitPrice,
-    totalCost,
     supplier,
     restockedBy,
     notes
   });
   
-  // Update current stock and price
+  // Update current stock
   this.currentStock += quantity;
-  this.unitPrice = unitPrice;
   this.lastRestocked = new Date();
   
   return this.save();

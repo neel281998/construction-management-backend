@@ -137,7 +137,6 @@ router.post('/', authenticateToken, requirePermission('site.update'), async (req
       materialType,
       quantity,
       unit,
-      unitPrice,
       supplier,
       specifications,
       reorderLevel,
@@ -152,7 +151,6 @@ router.post('/', authenticateToken, requirePermission('site.update'), async (req
       materialType,
       quantity,
       unit,
-      unitPrice,
       supplier,
       specifications,
       reorderLevel,
@@ -213,7 +211,7 @@ router.post('/bulk-from-template', authenticateToken, requirePermission('site.up
         materialType: material.materialType,
         quantity,
         unit: material.unit,
-        unitPrice: material.unitPrice,
+
         specifications: material.specifications,
         notes: `Added from ${template.name} template`,
         addedBy: req.user._id
@@ -383,18 +381,15 @@ router.get('/site/:siteId/summary', authenticateToken, requirePermission('site.r
           category: item.materialCategory,
           totalItems: 0,
           totalQuantity: 0,
-          totalCost: 0,
           materials: []
         };
       }
       summaryByCategory[item.materialCategory].totalItems++;
       summaryByCategory[item.materialCategory].totalQuantity += item.quantity;
-      summaryByCategory[item.materialCategory].totalCost += item.totalCost;
       summaryByCategory[item.materialCategory].materials.push({
         name: item.materialName,
         quantity: item.quantity,
-        unit: item.unit,
-        cost: item.totalCost
+        unit: item.unit
       });
       
       // By type
@@ -402,13 +397,11 @@ router.get('/site/:siteId/summary', authenticateToken, requirePermission('site.r
         summaryByType[item.materialType] = {
           type: item.materialType,
           totalItems: 0,
-          totalQuantity: 0,
-          totalCost: 0
+          totalQuantity: 0
         };
       }
       summaryByType[item.materialType].totalItems++;
       summaryByType[item.materialType].totalQuantity += item.quantity;
-      summaryByType[item.materialType].totalCost += item.totalCost;
     });
     
     res.json({
@@ -416,8 +409,7 @@ router.get('/site/:siteId/summary', authenticateToken, requirePermission('site.r
       data: { 
         summaryByCategory: Object.values(summaryByCategory),
         summaryByType: Object.values(summaryByType),
-        totalItems: inventory.length,
-        totalCost: inventory.reduce((sum, item) => sum + item.totalCost, 0)
+        totalItems: inventory.length
       }
     });
   } catch (error) {

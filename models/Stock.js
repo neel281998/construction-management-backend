@@ -24,14 +24,6 @@ const stockSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  unitPrice: {
-    type: Number,
-    required: true
-  },
-  totalCost: {
-    type: Number,
-    required: true
-  },
   supplier: {
     type: String
   },

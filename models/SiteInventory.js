@@ -35,16 +35,6 @@ const siteInventorySchema = new mongoose.Schema({
     default: 'm³',
     enum: ['m³', 'kg', 'liters', 'pieces', 'tons', 'sq.m', 'linear.m', 'bags', 'bundles']
   },
-  unitPrice: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
-  totalCost: {
-    type: Number,
-    default: 0,
-    min: 0
-  },
   supplier: {
     name: String,
     contact: String,
@@ -95,13 +85,5 @@ siteInventorySchema.index({ siteId: 1, materialName: 1 });
 siteInventorySchema.index({ materialType: 1 });
 siteInventorySchema.index({ materialCategory: 1 });
 siteInventorySchema.index({ status: 1 });
-
-// Pre-save middleware to calculate total cost
-siteInventorySchema.pre('save', function(next) {
-  if (this.quantity && this.unitPrice) {
-    this.totalCost = this.quantity * this.unitPrice;
-  }
-  next();
-});
 
 module.exports = mongoose.model('SiteInventory', siteInventorySchema);

@@ -50,13 +50,12 @@ router.post('/', authenticateToken, requirePermission('site.update'), async (req
       stockType,
       materialName,
       quantityM3,
-      unitPrice,
       supplier,
       notes
     } = req.body;
     
     // Validate required fields
-    if (!siteId || !stepId || !stockType || !materialName || !quantityM3 || !unitPrice) {
+    if (!siteId || !stepId || !stockType || !materialName || !quantityM3) {
       return res.status(400).json({
         success: false,
         message: 'Missing required fields'
@@ -71,16 +70,12 @@ router.post('/', authenticateToken, requirePermission('site.update'), async (req
       });
     }
     
-    const totalCost = quantityM3 * unitPrice;
-    
     const stock = new Stock({
       siteId,
       stepId,
       stockType,
       materialName,
       quantityM3,
-      unitPrice,
-      totalCost,
       supplier,
       notes,
       date: new Date()
@@ -108,33 +103,22 @@ router.get('/site/:siteId/summary', authenticateToken, requirePermission('site.r
     
     // Group by material
     const materialSummary = {};
-    let totalCost = 0;
     
     stocks.forEach(stock => {
       if (!materialSummary[stock.materialName]) {
         materialSummary[stock.materialName] = {
           materialName: stock.materialName,
           totalQuantityM3: 0,
-          totalCost: 0,
-          averageUnitPrice: 0,
           usageCount: 0
         };
       }
       
       materialSummary[stock.materialName].totalQuantityM3 += stock.quantityM3;
-      materialSummary[stock.materialName].totalCost += stock.totalCost;
       materialSummary[stock.materialName].usageCount += 1;
-      totalCost += stock.totalCost;
-    });
-    
-    // Calculate average unit prices
-    Object.values(materialSummary).forEach(material => {
-      material.averageUnitPrice = material.totalCost / material.totalQuantityM3;
     });
     
     const summary = {
       materialSummary: Object.values(materialSummary),
-      totalCost,
       totalMaterials: Object.keys(materialSummary).length
     };
     

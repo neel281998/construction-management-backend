@@ -9,7 +9,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'tons',
         typicalQuantity: 0.15,
-        unitPrice: 45000,
         specifications: {
           grade: 'VG-30',
           quality: 'Premium'
@@ -21,7 +20,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'm³',
         typicalQuantity: 1.2,
-        unitPrice: 1200,
         specifications: {
           size: '20mm',
           quality: 'Crushed Stone'
@@ -33,7 +31,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'm³',
         typicalQuantity: 0.8,
-        unitPrice: 1400,
         specifications: {
           size: '10mm',
           quality: 'Crushed Stone'
@@ -45,7 +42,6 @@ const materialTemplates = {
         materialType: 'secondary',
         unit: 'm³',
         typicalQuantity: 0.3,
-        unitPrice: 800,
         specifications: {
           size: 'Fine',
           quality: 'Stone Dust'
@@ -57,7 +53,6 @@ const materialTemplates = {
         materialType: 'secondary',
         unit: 'kg',
         typicalQuantity: 50,
-        unitPrice: 15,
         specifications: {
           grade: 'Class A',
           quality: 'Hydrated'
@@ -76,7 +71,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'bags',
         typicalQuantity: 7.5,
-        unitPrice: 350,
         specifications: {
           grade: 'OPC-53',
           quality: 'Premium'
@@ -88,7 +82,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'm³',
         typicalQuantity: 0.85,
-        unitPrice: 1200,
         specifications: {
           size: '20mm',
           quality: 'Crushed Stone'
@@ -100,7 +93,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'm³',
         typicalQuantity: 0.55,
-        unitPrice: 1800,
         specifications: {
           size: 'Fine',
           quality: 'River Sand'
@@ -112,7 +104,6 @@ const materialTemplates = {
         materialType: 'secondary',
         unit: 'kg',
         typicalQuantity: 80,
-        unitPrice: 65,
         specifications: {
           grade: 'Fe-500',
           quality: 'TMT Bars'
@@ -124,7 +115,6 @@ const materialTemplates = {
         materialType: 'auxiliary',
         unit: 'liters',
         typicalQuantity: 200,
-        unitPrice: 0.05,
         specifications: {
           quality: 'Potable',
           source: 'Municipal'
@@ -143,7 +133,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'bags',
         typicalQuantity: 12,
-        unitPrice: 350,
         specifications: {
           grade: 'OPC-53',
           quality: 'Premium'
@@ -155,7 +144,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'kg',
         typicalQuantity: 150,
-        unitPrice: 65,
         specifications: {
           grade: 'Fe-500',
           quality: 'TMT Bars'
@@ -167,7 +155,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'm³',
         typicalQuantity: 0.9,
-        unitPrice: 1100,
         specifications: {
           size: '40mm',
           quality: 'Crushed Stone'
@@ -179,7 +166,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'm³',
         typicalQuantity: 0.45,
-        unitPrice: 1800,
         specifications: {
           size: 'Fine',
           quality: 'River Sand'
@@ -191,7 +177,6 @@ const materialTemplates = {
         materialType: 'auxiliary',
         unit: 'sq.m',
         typicalQuantity: 8,
-        unitPrice: 450,
         specifications: {
           grade: 'Commercial',
           quality: 'Plywood'
@@ -210,7 +195,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'bags',
         typicalQuantity: 6,
-        unitPrice: 350,
         specifications: {
           grade: 'OPC-53',
           quality: 'Premium'
@@ -222,7 +206,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'm³',
         typicalQuantity: 0.7,
-        unitPrice: 1200,
         specifications: {
           size: '20mm',
           quality: 'Crushed Stone'
@@ -234,7 +217,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'm³',
         typicalQuantity: 0.4,
-        unitPrice: 1800,
         specifications: {
           size: 'Fine',
           quality: 'River Sand'
@@ -246,7 +228,6 @@ const materialTemplates = {
         materialType: 'primary',
         unit: 'linear.m',
         typicalQuantity: 10,
-        unitPrice: 1200,
         specifications: {
           size: '300mm',
           quality: 'RCC Pipes'
@@ -258,7 +239,6 @@ const materialTemplates = {
         materialType: 'auxiliary',
         unit: 'pieces',
         typicalQuantity: 2,
-        unitPrice: 2500,
         specifications: {
           size: '600x600mm',
           quality: 'Cast Iron'

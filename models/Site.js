@@ -80,16 +80,6 @@ const siteSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-  budget: {
-    type: Number,
-    required: [true, 'Budget is required'],
-    min: [0, 'Budget must be positive']
-  },
-  currentCost: {
-    type: Number,
-    default: 0,
-    min: [0, 'Current cost cannot be negative']
-  },
   siteManager: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -192,11 +182,6 @@ const siteSchema = new mongoose.Schema({
 // Virtual for full address
 siteSchema.virtual('fullAddress').get(function() {
   return `${this.address.street}, ${this.address.city}, ${this.address.state} ${this.address.zipCode}`;
-});
-
-// Virtual for budget utilization percentage
-siteSchema.virtual('budgetUtilization').get(function() {
-  return this.budget > 0 ? Math.round((this.currentCost / this.budget) * 100) : 0;
 });
 
 // Virtual for days remaining

@@ -200,7 +200,6 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       address, 
       startDate, 
       expectedEndDate, 
-      budget, 
       estimatedVolumeM3,
       siteManagerId 
     } = req.body;
@@ -220,7 +219,6 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       address,
       startDate,
       expectedEndDate,
-      budget,
       estimatedVolumeM3,
       siteManager: siteManagerId || req.user._id
     };
@@ -309,7 +307,6 @@ async function createSiteInventory(siteId, steps) {
           materialType: 'primary',
           quantity: step.estimatedVolumeM3,
           unit: 'm³',
-          estimatedCost: 0, // Will be updated later
           notes: `Primary material for ${step.stepName}`
         });
         inventoryPromises.push(primaryInventory.save());
@@ -324,7 +321,6 @@ async function createSiteInventory(siteId, steps) {
           materialType: 'secondary',
           quantity: step.estimatedVolumeM3 * 0.3, // Secondary materials usually 30% of primary
           unit: 'm³',
-          estimatedCost: 0, // Will be updated later
           notes: `Secondary material for ${step.stepName}`
         });
         inventoryPromises.push(secondaryInventory.save());
@@ -436,57 +432,7 @@ router.put('/:id/manager', authenticateToken, requirePermission('site.update'), 
   }
 });
 
-// Update site budget (specific route before general /:id)
-router.put('/:id/budget', authenticateToken, requirePermission('site.update'), async (req, res) => {
-  try {
-    const { budget, actualCost } = req.body;
-    
-    const site = await Site.findById(req.params.id);
-    
-    if (!site) {
-      return res.status(404).json({
-        success: false,
-        message: 'Site not found'
-      });
-    }
-    
-    // Check permissions
-    if (req.user.role !== 'admin' && site.siteManager.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-    
-    if (budget !== undefined) {
-      site.budget = budget;
-    }
-    
-    if (actualCost !== undefined) {
-      site.actualCost = actualCost;
-    }
-    
-    await site.save();
-    
-    res.json({
-      success: true,
-      message: 'Site budget updated successfully',
-      data: {
-        siteId: site._id,
-        budget: site.budget,
-        actualCost: site.actualCost,
-        costVariance: site.budget - site.actualCost
-      }
-    });
-    
-  } catch (error) {
-    console.error('Update site budget error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update site budget'
-    });
-  }
-});
+
 
 // Update site (general route - must come after specific routes)
 router.put('/:id', authenticateToken, requirePermission('site.update'), async (req, res) => {

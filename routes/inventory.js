@@ -48,10 +48,7 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
         isActive: true,
         $expr: { $lte: ['$currentStock', '$minimumStock'] }
       }),
-      Inventory.aggregate([
-        { $match: { isActive: true } },
-        { $group: { _id: null, total: { $sum: { $multiply: ['$currentStock', '$unitPrice'] } } } }
-      ])
+      Promise.resolve([{ total: 0 }])
     ]);
     
     res.json({
@@ -148,7 +145,7 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
 // Restock inventory item
 router.post('/:id/restock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
-    const { quantity, unitPrice, supplier, notes } = req.body;
+    const { quantity, supplier, notes } = req.body;
     
     if (!quantity || quantity <= 0) {
       return res.status(400).json({
@@ -157,12 +154,7 @@ router.post('/:id/restock', authenticateToken, requirePermission('inventory.upda
       });
     }
     
-    if (!unitPrice || unitPrice <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Valid unit price is required'
-      });
-    }
+
     
     const item = await Inventory.findById(req.params.id);
     
@@ -176,7 +168,7 @@ router.post('/:id/restock', authenticateToken, requirePermission('inventory.upda
     const previousStock = item.currentStock;
     
     // Use the restock method
-    await item.restock(quantity, unitPrice, supplier || item.supplier.name, req.user._id, notes);
+    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes);
     
     res.json({
       success: true,
@@ -186,7 +178,7 @@ router.post('/:id/restock', authenticateToken, requirePermission('inventory.upda
         previousStock,
         newStock: item.currentStock,
         restockQuantity: quantity,
-        totalCost: quantity * unitPrice
+
       }
     });
     
@@ -365,61 +357,7 @@ router.put('/:id/stock', authenticateToken, requirePermission('inventory.update'
   }
 });
 
-// Update inventory pricing (specific route before general /:id)
-router.put('/:id/pricing', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
-  try {
-    const { unitPrice, costPrice } = req.body;
-    
-    const item = await Inventory.findById(req.params.id);
-    
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: 'Inventory item not found'
-      });
-    }
-    
-    if (unitPrice !== undefined) {
-      if (unitPrice < 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Unit price cannot be negative'
-        });
-      }
-      item.unitPrice = unitPrice;
-    }
-    
-    if (costPrice !== undefined) {
-      if (costPrice < 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cost price cannot be negative'
-        });
-      }
-      item.costPrice = costPrice;
-    }
-    
-    await item.save();
-    
-    res.json({
-      success: true,
-      message: 'Pricing updated successfully',
-      data: {
-        itemId: item._id,
-        unitPrice: item.unitPrice,
-        costPrice: item.costPrice,
-        profitMargin: item.unitPrice - item.costPrice
-      }
-    });
-    
-  } catch (error) {
-    console.error('Update pricing error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update pricing'
-    });
-  }
-});
+
 
 // Update inventory supplier (specific route before general /:id)
 router.put('/:id/supplier', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
