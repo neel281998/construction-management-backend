@@ -486,6 +486,59 @@ router.put('/:id', authenticateToken, requirePermission('site.update'), async (r
   }
 });
 
+// Get site progress
+router.get('/:id/progress', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const site = await Site.findById(req.params.id)
+      .populate('steps', 'stepNumber stepName status progressPercentage progressM3 estimatedM3')
+      .populate('siteManager', 'firstName lastName email');
+    
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+
+    // Calculate progress summary
+    const steps = site.steps || [];
+    const totalEstimatedM3 = steps.reduce((sum, step) => sum + (step.estimatedM3 || 0), 0);
+    const totalProgressM3 = steps.reduce((sum, step) => sum + (step.progressM3 || 0), 0);
+    const overallProgressPercentage = totalEstimatedM3 > 0 ? Math.round((totalProgressM3 / totalEstimatedM3) * 100) : 0;
+    
+    // Find current step (first incomplete step)
+    const currentStep = steps.findIndex(step => step.status !== 'completed') + 1;
+    
+    const progressData = {
+      site: {
+        _id: site._id,
+        name: site.name,
+        status: site.status,
+        siteManager: site.siteManager
+      },
+      steps: steps,
+      progress: {
+        totalEstimatedM3,
+        totalProgressM3,
+        overallProgressPercentage,
+        currentStep: currentStep > 0 ? currentStep : steps.length
+      }
+    };
+
+    res.json({
+      success: true,
+      data: progressData
+    });
+    
+  } catch (error) {
+    console.error('Get site progress error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch site progress'
+    });
+  }
+});
+
 // Update site progress
 router.put('/:id/progress', authenticateToken, requirePermission('site.update'), async (req, res) => {
   try {
