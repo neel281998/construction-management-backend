@@ -167,6 +167,9 @@ router.get('/:id/progress', authenticateToken, requirePermission('site.read'), a
       ? Math.round((totalProgressM3 / totalEstimatedM3) * 100) 
       : 0;
     
+    // Find current step (first incomplete step)
+    const currentStep = steps.findIndex(step => step.status !== 'completed') + 1;
+    
     res.json({
       success: true,
       data: { 
@@ -176,7 +179,7 @@ router.get('/:id/progress', authenticateToken, requirePermission('site.read'), a
           totalEstimatedM3,
           totalProgressM3,
           overallProgressPercentage,
-          currentStep: site.currentStep
+          currentStep: currentStep > 0 ? currentStep : steps.length
         }
       }
     });
@@ -230,7 +233,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     const steps = await createStepsForSite(site._id, siteType, estimatedVolumeM3);
     
     // Create inventory items for each step
-    await createSiteInventory(site._id, steps);
+    await createSiteInventory(site._id, steps, req.user._id);
     
     // Populate the response
     await site.populate('siteManager', 'firstName lastName email');
@@ -271,7 +274,7 @@ async function createStepsForSite(siteId, siteType, totalVolumeM3) {
       const totalDefaultVolume = steps.reduce((sum, step) => sum + step.defaultVolumeM3, 0);
       const proportionalVolume = (stepConfig.defaultVolumeM3 / totalDefaultVolume) * totalVolumeM3;
       
-      const step = new Step({
+      const newStep = new Step({
         siteId,
         stepNumber: stepConfig.stepNumber,
         stepName: stepConfig.stepName,
@@ -281,7 +284,7 @@ async function createStepsForSite(siteId, siteType, totalVolumeM3) {
         status: 'pending'
       });
       
-      return step.save();
+      return newStep.save();
     });
     
     const createdSteps = await Promise.all(stepPromises);
@@ -293,7 +296,7 @@ async function createStepsForSite(siteId, siteType, totalVolumeM3) {
 }
 
 // Helper function to create inventory items for a site
-async function createSiteInventory(siteId, steps) {
+async function createSiteInventory(siteId, steps, userId) {
   try {
     const inventoryPromises = [];
     
@@ -304,10 +307,12 @@ async function createSiteInventory(siteId, steps) {
           siteId,
           stepId: step._id,
           materialName: step.primaryStock,
+          materialCategory: 'aggregates', // Default category for primary materials
           materialType: 'primary',
           quantity: step.estimatedVolumeM3,
           unit: 'm³',
-          notes: `Primary material for ${step.stepName}`
+          notes: `Primary material for ${step.stepName}`,
+          addedBy: userId
         });
         inventoryPromises.push(primaryInventory.save());
       }
@@ -318,10 +323,12 @@ async function createSiteInventory(siteId, steps) {
           siteId,
           stepId: step._id,
           materialName: step.secondaryStock,
+          materialCategory: 'cement_concrete', // Default category for secondary materials
           materialType: 'secondary',
           quantity: step.estimatedVolumeM3 * 0.3, // Secondary materials usually 30% of primary
           unit: 'm³',
-          notes: `Secondary material for ${step.stepName}`
+          notes: `Secondary material for ${step.stepName}`,
+          addedBy: userId
         });
         inventoryPromises.push(secondaryInventory.save());
       }
@@ -486,58 +493,7 @@ router.put('/:id', authenticateToken, requirePermission('site.update'), async (r
   }
 });
 
-// Get site progress
-router.get('/:id/progress', authenticateToken, requirePermission('site.read'), async (req, res) => {
-  try {
-    const site = await Site.findById(req.params.id)
-      .populate('steps', 'stepNumber stepName status progressPercentage progressM3 estimatedM3')
-      .populate('siteManager', 'firstName lastName email');
-    
-    if (!site) {
-      return res.status(404).json({
-        success: false,
-        message: 'Site not found'
-      });
-    }
 
-    // Calculate progress summary
-    const steps = site.steps || [];
-    const totalEstimatedM3 = steps.reduce((sum, step) => sum + (step.estimatedM3 || 0), 0);
-    const totalProgressM3 = steps.reduce((sum, step) => sum + (step.progressM3 || 0), 0);
-    const overallProgressPercentage = totalEstimatedM3 > 0 ? Math.round((totalProgressM3 / totalEstimatedM3) * 100) : 0;
-    
-    // Find current step (first incomplete step)
-    const currentStep = steps.findIndex(step => step.status !== 'completed') + 1;
-    
-    const progressData = {
-      site: {
-        _id: site._id,
-        name: site.name,
-        status: site.status,
-        siteManager: site.siteManager
-      },
-      steps: steps,
-      progress: {
-        totalEstimatedM3,
-        totalProgressM3,
-        overallProgressPercentage,
-        currentStep: currentStep > 0 ? currentStep : steps.length
-      }
-    };
-
-    res.json({
-      success: true,
-      data: progressData
-    });
-    
-  } catch (error) {
-    console.error('Get site progress error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch site progress'
-    });
-  }
-});
 
 // Update site progress
 router.put('/:id/progress', authenticateToken, requirePermission('site.update'), async (req, res) => {
