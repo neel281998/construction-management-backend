@@ -285,11 +285,22 @@ router.get('/alerts/low-stock', authenticateToken, requirePermission('inventory.
 // Get inventory categories
 router.get('/meta/categories', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
   try {
-    const categories = await Inventory.distinct('category', { isActive: true });
+    // Return the valid categories from the model schema
+    const validCategories = [
+      'Building Materials',
+      'Steel Products',
+      'Safety Equipment',
+      'Tools & Equipment',
+      'Electrical Supplies',
+      'Plumbing Supplies',
+      'Finishing Materials',
+      'Hardware',
+      'Other'
+    ];
     
     res.json({
       success: true,
-      data: { categories }
+      data: { categories: validCategories }
     });
     
   } catch (error) {
