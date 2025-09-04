@@ -414,4 +414,70 @@ router.get('/stats/overview', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
+// Get available site managers (not assigned to active sites)
+router.get('/available/site-managers', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const Site = require('../models/Site');
+    
+    // Find site managers who are not assigned to active sites
+    const assignedManagers = await Site.find({
+      status: { $in: ['planning', 'active', 'on_hold'] },
+      siteManager: { $exists: true }
+    }).distinct('siteManager');
+    
+    const availableManagers = await User.find({
+      role: 'site_manager',
+      isActive: true,
+      _id: { $nin: assignedManagers }
+    }).select('_id firstName lastName email');
+    
+    res.json({
+      success: true,
+      data: {
+        managers: availableManagers
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get available site managers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available site managers'
+    });
+  }
+});
+
+// Get available inventory managers (not assigned to active sites)
+router.get('/available/inventory-managers', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const Site = require('../models/Site');
+    
+    // Find inventory managers who are not assigned to active sites
+    const assignedManagers = await Site.find({
+      status: { $in: ['planning', 'active', 'on_hold'] },
+      inventoryManager: { $exists: true }
+    }).distinct('inventoryManager');
+    
+    const availableManagers = await User.find({
+      role: 'inventory_manager',
+      isActive: true,
+      _id: { $nin: assignedManagers }
+    }).select('_id firstName lastName email');
+    
+    res.json({
+      success: true,
+      data: {
+        managers: availableManagers
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get available inventory managers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available inventory managers'
+    });
+  }
+});
+
 module.exports = router;

@@ -171,17 +171,18 @@ userSchema.pre('save', function(next) {
       'report.generate', 'report.export'
     ],
     site_manager: [
-      'user.read', 'user.update',
-      'site.create', 'site.read', 'site.update',
-      'vehicle.read', 'vehicle.update',
+      'site.read', 'site.update', // Can only read assigned sites and update progress
       'attendance.read', 'attendance.approve',
       'report.generate'
     ],
     supervisor: [
-      'site.read', 'site.update',
-      'vehicle.read',
-      'attendance.read',
-      'report.generate'
+      'user.create', 'user.read', // Can view and create users
+      'site.create', 'site.read', // Can view and create sites
+      'vehicle.create', 'vehicle.read', // Can view and create vehicles
+      'inventory.create', 'inventory.read', // Can view and create inventory
+      'attendance.read', 'attendance.approve', // Can view and approve attendance
+      'report.generate' // Can generate reports
+      // Note: No update/delete permissions for supervisor
     ],
     worker: [
       'site.read',

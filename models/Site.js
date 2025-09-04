@@ -85,6 +85,11 @@ const siteSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'Site manager is required']
   },
+  inventoryManager: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: [true, 'Inventory manager is required']
+  },
   assignedStaff: [{
     user: {
       type: mongoose.Schema.Types.ObjectId,

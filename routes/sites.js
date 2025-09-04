@@ -204,7 +204,9 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       startDate, 
       expectedEndDate, 
       estimatedVolumeM3,
-      siteManagerId 
+      siteManagerId,
+      inventoryManagerId,
+      assignedVehicleIds
     } = req.body;
     
     // Validate site type
@@ -212,6 +214,21 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       return res.status(400).json({
         success: false,
         message: 'Invalid site type'
+      });
+    }
+    
+    // Validate required managers
+    if (!siteManagerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Site manager is required'
+      });
+    }
+    
+    if (!inventoryManagerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Inventory manager is required'
       });
     }
     
@@ -223,11 +240,25 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       startDate,
       expectedEndDate,
       estimatedVolumeM3,
-      siteManager: siteManagerId || req.user._id
+      siteManager: siteManagerId,
+      inventoryManager: inventoryManagerId,
+      assignedVehicles: assignedVehicleIds ? assignedVehicleIds.map(vehicleId => ({
+        vehicle: vehicleId,
+        assignedDate: new Date()
+      })) : []
     };
     
     const site = new Site(siteData);
     await site.save();
+    
+    // Update vehicle statuses to 'in_use' if vehicles are assigned
+    if (assignedVehicleIds && assignedVehicleIds.length > 0) {
+      const Vehicle = require('../models/Vehicle');
+      await Vehicle.updateMany(
+        { _id: { $in: assignedVehicleIds } },
+        { status: 'in_use' }
+      );
+    }
     
     // Create steps for the site
     const steps = await createStepsForSite(site._id, siteType, estimatedVolumeM3);
@@ -236,7 +267,11 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     await createSiteInventory(site._id, steps, req.user._id);
     
     // Populate the response
-    await site.populate('siteManager', 'firstName lastName email');
+    await site.populate([
+      { path: 'siteManager', select: 'firstName lastName email' },
+      { path: 'inventoryManager', select: 'firstName lastName email' },
+      { path: 'assignedVehicles.vehicle', select: 'vehicleNumber type brand model' }
+    ]);
     
     res.status(201).json({
       success: true,
