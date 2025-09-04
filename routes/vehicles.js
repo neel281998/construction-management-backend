@@ -104,6 +104,52 @@ router.get('/maintenance/due', authenticateToken, requirePermission('vehicle.rea
   }
 });
 
+// Get available vehicles (not assigned to active sites) - MUST come before /:id route
+router.get('/available', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
+  try {
+    const Site = require('../models/Site');
+    
+    // Find sites with active status that have assigned vehicles
+    const activeSites = await Site.find({
+      status: { $in: ['planning', 'active', 'on_hold'] },
+      assignedVehicles: { $exists: true, $ne: [] }
+    }).select('assignedVehicles');
+    
+    // Extract all assigned vehicle IDs
+    const assignedVehicleIds = [];
+    activeSites.forEach(site => {
+      if (site.assignedVehicles && site.assignedVehicles.length > 0) {
+        site.assignedVehicles.forEach(assignment => {
+          if (assignment.vehicle) {
+            assignedVehicleIds.push(assignment.vehicle);
+          }
+        });
+      }
+    });
+    
+    // Find available vehicles (not in the assigned list)
+    const availableVehicles = await Vehicle.find({
+      isActive: true,
+      status: 'available',
+      _id: { $nin: assignedVehicleIds }
+    }).select('_id vehicleNumber type brand model year status');
+    
+    res.json({
+      success: true,
+      data: {
+        vehicles: availableVehicles
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get available vehicles error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available vehicles'
+    });
+  }
+});
+
 // Get single vehicle
 router.get('/:id', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
   try {
@@ -433,39 +479,6 @@ router.delete('/:id', authenticateToken, requirePermission('vehicle.delete'), as
     res.status(500).json({
       success: false,
       message: 'Failed to delete vehicle'
-    });
-  }
-});
-
-// Get available vehicles (not assigned to active sites)
-router.get('/available', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
-  try {
-    const Site = require('../models/Site');
-    
-    // Find vehicles that are not assigned to active sites
-    const assignedVehicles = await Site.find({
-      status: { $in: ['planning', 'active', 'on_hold'] },
-      assignedVehicles: { $exists: true, $ne: [] }
-    }).distinct('assignedVehicles.vehicle');
-    
-    const availableVehicles = await Vehicle.find({
-      isActive: true,
-      status: 'available',
-      _id: { $nin: assignedVehicles }
-    }).select('_id vehicleNumber type brand model year status');
-    
-    res.json({
-      success: true,
-      data: {
-        vehicles: availableVehicles
-      }
-    });
-    
-  } catch (error) {
-    console.error('Get available vehicles error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch available vehicles'
     });
   }
 });
