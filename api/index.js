@@ -53,27 +53,60 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Database connection with improved connection management
 let isConnected = false;
+let connectionAttempts = 0;
+const maxRetries = 3;
 
 async function connectDB() {
   if (isConnected) return;
 
   try {
+    connectionAttempts++;
+    console.log(`🔄 Attempting MongoDB connection (attempt ${connectionAttempts}/${maxRetries})...`);
+    
     const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://constructionchoudhary159632:EISf9b3Mbf8toQWe@cluster0.ug5nrys.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+    
     const conn = await mongoose.connect(mongoUri, {
       dbName: 'construction_management',
       bufferCommands: true,
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 10000,
+      serverSelectionTimeoutMS: 30000, // Increased to 30 seconds
+      socketTimeoutMS: 45000, // 45 seconds
+      connectTimeoutMS: 30000, // 30 seconds
+      maxIdleTimeMS: 30000, // 30 seconds
+      retryWrites: true,
+      w: 'majority'
     });
+    
     isConnected = conn.connections[0].readyState === 1;
-    console.log('✅ Connected to MongoDB');
+    connectionAttempts = 0; // Reset on success
+    console.log('✅ Connected to MongoDB successfully');
+    
   } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
+    console.error(`❌ MongoDB connection error (attempt ${connectionAttempts}):`, err.message);
+    
+    if (connectionAttempts < maxRetries) {
+      console.log(`⏳ Retrying connection in 5 seconds...`);
+      setTimeout(connectDB, 5000);
+    } else {
+      console.error('❌ Max connection attempts reached. MongoDB connection failed.');
+    }
   }
 }
 
 // Call once at startup
 connectDB();
+
+// Database connection check middleware
+app.use((req, res, next) => {
+  if (!isConnected && mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection not ready. Please try again in a moment.',
+      retryAfter: 5
+    });
+  }
+  next();
+});
 
 // Root endpoint for debugging
 app.get('/', (req, res) => {
