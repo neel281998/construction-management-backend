@@ -88,6 +88,47 @@ router.patch('/:id/progress', authenticateToken, requirePermission('site.update'
   }
 });
 
+// Update step dimensions and calculate progress
+router.patch('/:id/dimensions', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { length, breadth, height, notes } = req.body;
+    
+    const step = await Step.findById(req.params.id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    // Update dimensions
+    if (length !== undefined) step.dimensions.length = length;
+    if (breadth !== undefined) step.dimensions.breadth = breadth;
+    if (height !== undefined) step.dimensions.height = height;
+    if (notes) step.notes = notes;
+    
+    // Calculate progress from dimensions
+    const progressData = step.calculateProgressFromDimensions();
+    
+    await step.save();
+    
+    res.json({
+      success: true,
+      message: 'Step dimensions updated successfully',
+      data: { 
+        step,
+        calculatedProgress: progressData
+      }
+    });
+  } catch (error) {
+    console.error('Update step dimensions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update step dimensions'
+    });
+  }
+});
+
 // Update step status
 router.patch('/:id/status', authenticateToken, requirePermission('site.update'), async (req, res) => {
   try {
