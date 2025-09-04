@@ -7,46 +7,24 @@ const Inventory = require('../models/Inventory');
 const Step = require('../models/Step');
 const { getMaterialTemplate, getAllMaterialTemplates, getMaterialCategories, getUnits } = require('../config/materialTemplates');
 
-// Test route to verify siteInventory routes are working
-router.get('/test', (req, res) => {
-  res.json({
-    success: true,
-    message: 'SiteInventory routes are working!',
-    timestamp: new Date().toISOString(),
-    availableRoutes: [
-      'GET /site-inventory/test',
-      'GET /site-inventory/step/:stepId',
-      'GET /site-inventory/site/:siteId',
-      'POST /site-inventory/',
-      'GET /site-inventory/available-inventory'
-    ]
-  });
-});
-
 // Get inventory for a specific step (must come before /site/:siteId to avoid route conflicts)
 router.get('/step/:stepId', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
-    console.log('Getting inventory for step:', req.params.stepId);
-    
     const inventory = await SiteInventory.find({ 
       stepId: req.params.stepId, 
       isActive: true 
     }).populate('addedBy', 'firstName lastName')
       .sort({ materialCategory: 1, materialName: 1 });
     
-    console.log(`Found ${inventory.length} inventory items for step ${req.params.stepId}`);
-    
     res.json({
       success: true,
-      data: { inventory },
-      message: `Found ${inventory.length} inventory items for step ${req.params.stepId}`
+      data: { inventory }
     });
   } catch (error) {
     console.error('Get step inventory error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch step inventory',
-      error: error.message
+      message: 'Failed to fetch step inventory'
     });
   }
 });

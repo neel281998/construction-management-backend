@@ -3,43 +3,21 @@ const router = express.Router();
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const Stock = require('../models/Stock');
 
-// Test route to verify stocks routes are working
-router.get('/test', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Stocks routes are working!',
-    timestamp: new Date().toISOString(),
-    availableRoutes: [
-      'GET /stocks/test',
-      'GET /stocks/step/:stepId',
-      'GET /stocks/site/:siteId',
-      'POST /stocks/',
-      'GET /stocks/site/:siteId/summary'
-    ]
-  });
-});
-
 // Get stocks for a specific step (must come before /site/:siteId to avoid route conflicts)
 router.get('/step/:stepId', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
-    console.log('Getting stocks for step:', req.params.stepId);
-    
     const stocks = await Stock.find({ stepId: req.params.stepId })
       .sort({ date: -1 });
     
-    console.log(`Found ${stocks.length} stocks for step ${req.params.stepId}`);
-    
     res.json({
       success: true,
-      data: { stocks },
-      message: `Found ${stocks.length} stock records for step ${req.params.stepId}`
+      data: { stocks }
     });
   } catch (error) {
     console.error('Get step stocks error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch step stocks',
-      error: error.message
+      message: 'Failed to fetch step stocks'
     });
   }
 });
