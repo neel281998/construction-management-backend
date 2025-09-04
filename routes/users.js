@@ -335,6 +335,37 @@ router.put('/:id/deactivate', authenticateToken, requireAdmin, async (req, res) 
   }
 });
 
+// Activate user (admin only)
+router.put('/:id/activate', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { isActive: true },
+      { new: true }
+    ).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'User activated successfully',
+      data: { user }
+    });
+    
+  } catch (error) {
+    console.error('Activate user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to activate user'
+    });
+  }
+});
+
 // Get user statistics
 router.get('/stats/overview', authenticateToken, requireAdmin, async (req, res) => {
   try {
