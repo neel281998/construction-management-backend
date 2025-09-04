@@ -51,61 +51,86 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Database connection with improved connection management
-let isConnected = false;
-let connectionAttempts = 0;
-const maxRetries = 3;
+// Database connection optimized for Vercel serverless
+let connectionPromise = null;
 
 async function connectDB() {
-  if (isConnected) return;
+  // If already connected, return immediately
+  if (mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
+
+  // If connection is in progress, wait for it
+  if (connectionPromise) {
+    return connectionPromise;
+  }
+
+  // Start new connection
+  connectionPromise = mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://constructionchoudhary159632:EISf9b3Mbf8toQWe@cluster0.ug5nrys.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
+    dbName: 'construction_management',
+    bufferCommands: false, // Disable buffering for serverless
+    maxPoolSize: 1, // Single connection for serverless
+    serverSelectionTimeoutMS: 5000, // Faster timeout for serverless
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 10000,
+    maxIdleTimeMS: 10000,
+    retryWrites: true,
+    w: 'majority'
+  });
 
   try {
-    connectionAttempts++;
-    console.log(`🔄 Attempting MongoDB connection (attempt ${connectionAttempts}/${maxRetries})...`);
-    
-    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://constructionchoudhary159632:EISf9b3Mbf8toQWe@cluster0.ug5nrys.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
-    
-    const conn = await mongoose.connect(mongoUri, {
-      dbName: 'construction_management',
-      bufferCommands: true,
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 30000, // Increased to 30 seconds
-      socketTimeoutMS: 45000, // 45 seconds
-      connectTimeoutMS: 30000, // 30 seconds
-      maxIdleTimeMS: 30000, // 30 seconds
-      retryWrites: true,
-      w: 'majority'
-    });
-    
-    isConnected = conn.connections[0].readyState === 1;
-    connectionAttempts = 0; // Reset on success
+    const conn = await connectionPromise;
     console.log('✅ Connected to MongoDB successfully');
-    
+    return conn;
   } catch (err) {
-    console.error(`❌ MongoDB connection error (attempt ${connectionAttempts}):`, err.message);
-    
-    if (connectionAttempts < maxRetries) {
-      console.log(`⏳ Retrying connection in 5 seconds...`);
-      setTimeout(connectDB, 5000);
-    } else {
-      console.error('❌ Max connection attempts reached. MongoDB connection failed.');
-    }
+    console.error('❌ MongoDB connection error:', err.message);
+    connectionPromise = null; // Reset so we can try again
+    throw err;
   }
 }
 
 // Call once at startup
 connectDB();
 
-// Database connection check middleware
-app.use((req, res, next) => {
-  if (!isConnected && mongoose.connection.readyState !== 1) {
-    return res.status(503).json({
+// Connection event listeners for monitoring
+mongoose.connection.on('connected', () => {
+  console.log('✅ Mongoose connected to MongoDB');
+});
+
+mongoose.connection.on('error', (err) => {
+  console.error('❌ Mongoose connection error:', err);
+  connectionPromise = null; // Reset connection promise on error
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️ Mongoose disconnected from MongoDB');
+  connectionPromise = null; // Reset connection promise on disconnect
+});
+
+mongoose.connection.on('reconnected', () => {
+  console.log('🔄 Mongoose reconnected to MongoDB');
+});
+
+// Database connection middleware - ensures connection before processing requests
+app.use(async (req, res, next) => {
+  // Skip connection check for health endpoints
+  if (req.path === '/' || req.path === '/api/health') {
+    return next();
+  }
+  
+  try {
+    // Ensure database connection
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('Database connection failed in middleware:', err.message);
+    res.status(503).json({
       success: false,
-      message: 'Database connection not ready. Please try again in a moment.',
-      retryAfter: 5
+      message: 'Database connection failed. Please try again in a moment.',
+      retryAfter: 3,
+      connectionState: 'failed'
     });
   }
-  next();
 });
 
 // Root endpoint for debugging
@@ -145,10 +170,31 @@ app.use('/api/site-inventory', siteInventoryRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+  const connectionStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  const dbState = mongoose.connection.readyState;
+  const isHealthy = dbState === 1;
+  
   res.json({ 
-    status: 'OK', 
+    status: isHealthy ? 'OK' : 'DEGRADED',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    database: {
+      state: connectionStates[dbState],
+      readyState: dbState,
+      host: mongoose.connection.host,
+      port: mongoose.connection.port,
+      name: mongoose.connection.name
+    },
+    serverless: {
+      connectionPromise: connectionPromise ? 'active' : 'none',
+      environment: process.env.NODE_ENV || 'production'
+    }
   });
 });
 
