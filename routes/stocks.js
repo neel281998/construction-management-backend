@@ -3,6 +3,25 @@ const router = express.Router();
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const Stock = require('../models/Stock');
 
+// Get stocks for a specific step (must come before /site/:siteId to avoid route conflicts)
+router.get('/step/:stepId', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const stocks = await Stock.find({ stepId: req.params.stepId })
+      .sort({ date: -1 });
+    
+    res.json({
+      success: true,
+      data: { stocks }
+    });
+  } catch (error) {
+    console.error('Get step stocks error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch step stocks'
+    });
+  }
+});
+
 // Get all stocks for a site
 router.get('/site/:siteId', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
@@ -18,25 +37,6 @@ router.get('/site/:siteId', authenticateToken, requirePermission('site.read'), a
     res.status(500).json({
       success: false,
       message: 'Failed to fetch stocks'
-    });
-  }
-});
-
-// Get stocks for a specific step
-router.get('/step/:stepId', authenticateToken, requirePermission('site.read'), async (req, res) => {
-  try {
-    const stocks = await Stock.find({ stepId: req.params.stepId })
-      .sort({ date: -1 });
-    
-    res.json({
-      success: true,
-      data: { stocks }
-    });
-  } catch (error) {
-    console.error('Get step stocks error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch step stocks'
     });
   }
 });

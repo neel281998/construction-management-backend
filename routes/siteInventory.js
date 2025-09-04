@@ -7,6 +7,28 @@ const Inventory = require('../models/Inventory');
 const Step = require('../models/Step');
 const { getMaterialTemplate, getAllMaterialTemplates, getMaterialCategories, getUnits } = require('../config/materialTemplates');
 
+// Get inventory for a specific step (must come before /site/:siteId to avoid route conflicts)
+router.get('/step/:stepId', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const inventory = await SiteInventory.find({ 
+      stepId: req.params.stepId, 
+      isActive: true 
+    }).populate('addedBy', 'firstName lastName')
+      .sort({ materialCategory: 1, materialName: 1 });
+    
+    res.json({
+      success: true,
+      data: { inventory }
+    });
+  } catch (error) {
+    console.error('Get step inventory error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch step inventory'
+    });
+  }
+});
+
 // Get all inventory for a specific site
 router.get('/site/:siteId', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
@@ -27,28 +49,6 @@ router.get('/site/:siteId', authenticateToken, requirePermission('site.read'), a
     res.status(500).json({
       success: false,
       message: 'Failed to fetch site inventory'
-    });
-  }
-});
-
-// Get inventory for a specific step
-router.get('/step/:stepId', authenticateToken, requirePermission('site.read'), async (req, res) => {
-  try {
-    const inventory = await SiteInventory.find({ 
-      stepId: req.params.stepId, 
-      isActive: true 
-    }).populate('addedBy', 'firstName lastName')
-      .sort({ materialCategory: 1, materialName: 1 });
-    
-    res.json({
-      success: true,
-      data: { inventory }
-    });
-  } catch (error) {
-    console.error('Get step inventory error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch step inventory'
     });
   }
 });

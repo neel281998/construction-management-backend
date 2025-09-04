@@ -49,11 +49,29 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Database connection
-const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://constructionchoudhary159632:EISf9b3Mbf8toQWe@cluster0.ug5nrys.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
-mongoose.connect(mongoUri)
-.then(() => console.log('✅ Connected to MongoDB'))
-.catch(err => console.error('❌ MongoDB connection error:', err));
+// Database connection with improved connection management
+let isConnected = false;
+
+async function connectDB() {
+  if (isConnected) return;
+
+  try {
+    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://constructionchoudhary159632:EISf9b3Mbf8toQWe@cluster0.ug5nrys.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+    const conn = await mongoose.connect(mongoUri, {
+      dbName: 'construction_management',
+      bufferCommands: false,
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
+    });
+    isConnected = conn.connections[0].readyState === 1;
+    console.log('✅ Connected to MongoDB');
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err.message);
+  }
+}
+
+// Call once at startup
+connectDB();
 
 // Root endpoint for debugging
 app.get('/', (req, res) => {
