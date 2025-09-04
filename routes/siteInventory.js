@@ -1,7 +1,9 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const SiteInventory = require('../models/SiteInventory');
+const Inventory = require('../models/Inventory');
 const Step = require('../models/Step');
 const { getMaterialTemplate, getAllMaterialTemplates, getMaterialCategories, getUnits } = require('../config/materialTemplates');
 
@@ -126,8 +128,53 @@ router.get('/units', authenticateToken, requirePermission('site.read'), async (r
   }
 });
 
-// Add new inventory item
+// Get available inventory items from central inventory for assignment
+router.get('/available-inventory', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const { siteId, search, category } = req.query;
+    
+    // Build query for central inventory items with stock > 0
+    let query = { 
+      isActive: true,
+      currentStock: { $gt: 0 } // Only items with available stock
+    };
+    
+    if (search) {
+      query.$or = [
+        { itemName: { $regex: search, $options: 'i' } },
+        { itemCode: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+    
+    const availableItems = await Inventory.find(query)
+      .select('itemName itemCode category currentStock minimumStock unit supplier location')
+      .sort({ itemName: 1 });
+    
+    res.json({
+      success: true,
+      data: { 
+        availableItems,
+        count: availableItems.length
+      }
+    });
+  } catch (error) {
+    console.error('Get available inventory error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available inventory items'
+    });
+  }
+});
+
+// Add new inventory item (with automatic stock deduction from central inventory)
 router.post('/', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
     const {
       siteId,
@@ -140,9 +187,43 @@ router.post('/', authenticateToken, requirePermission('site.update'), async (req
       supplier,
       specifications,
       reorderLevel,
-      notes
+      notes,
+      sourceInventoryId // Optional: ID of the central inventory item to deduct from
     } = req.body;
     
+    let sourceInventory = null;
+    
+    // If sourceInventoryId is provided, deduct from central inventory
+    if (sourceInventoryId) {
+      sourceInventory = await Inventory.findById(sourceInventoryId).session(session);
+      
+      if (!sourceInventory) {
+        await session.abortTransaction();
+        return res.status(404).json({
+          success: false,
+          message: 'Source inventory item not found'
+        });
+      }
+      
+      // Check if sufficient stock is available
+      if (sourceInventory.currentStock < quantity) {
+        await session.abortTransaction();
+        return res.status(400).json({
+          success: false,
+          message: 'Insufficient stock available',
+          data: {
+            requested: quantity,
+            available: sourceInventory.currentStock,
+            itemName: sourceInventory.itemName
+          }
+        });
+      }
+      
+      // Deduct stock from central inventory
+      await sourceInventory.consumeStock(quantity, req.user._id, `Assigned to step ${stepId}`);
+    }
+    
+    // Create the step inventory item
     const inventoryItem = new SiteInventory({
       siteId,
       stepId,
@@ -155,20 +236,32 @@ router.post('/', authenticateToken, requirePermission('site.update'), async (req
       specifications,
       reorderLevel,
       notes,
+      sourceInventoryId: sourceInventoryId || null,
       addedBy: req.user._id
     });
     
-    await inventoryItem.save();
+    await inventoryItem.save({ session });
     
     // Populate references
-    await inventoryItem.populate(['stepId', 'addedBy']);
+    await inventoryItem.populate(['stepId', 'addedBy', 'sourceInventoryId']);
+    
+    await session.commitTransaction();
     
     res.status(201).json({
       success: true,
       message: 'Inventory item added successfully',
-      data: { inventoryItem }
+      data: { 
+        inventoryItem,
+        stockDeducted: sourceInventory ? {
+          sourceItemId: sourceInventory._id,
+          sourceItemName: sourceInventory.itemName,
+          deductedQuantity: quantity,
+          remainingStock: sourceInventory.currentStock
+        } : null
+      }
     });
   } catch (error) {
+    await session.abortTransaction();
     console.error('Add inventory item error:', error);
     
     if (error.name === 'ValidationError') {
@@ -180,10 +273,19 @@ router.post('/', authenticateToken, requirePermission('site.update'), async (req
       });
     }
     
+    if (error.message === 'Insufficient stock available') {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Failed to add inventory item'
     });
+  } finally {
+    session.endSession();
   }
 });
 

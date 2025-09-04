@@ -11,6 +11,11 @@ const siteInventorySchema = new mongoose.Schema({
     ref: 'Step',
     required: true
   },
+  sourceInventoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Inventory',
+    required: false // Optional for items not sourced from central inventory
+  },
   materialName: {
     type: String,
     required: true
