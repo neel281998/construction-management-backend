@@ -61,7 +61,7 @@ async function connectDB() {
     const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://constructionchoudhary159632:EISf9b3Mbf8toQWe@cluster0.ug5nrys.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
     const conn = await mongoose.connect(mongoUri, {
       dbName: 'construction_management',
-      bufferCommands: false,
+      bufferCommands: true,
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10000,
     });
