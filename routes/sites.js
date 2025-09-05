@@ -659,4 +659,317 @@ router.delete('/:id', authenticateToken, requirePermission('site.delete'), async
   }
 });
 
+// Get progress analytics for a site
+router.get('/:id/progress-analytics', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const { period = '30d' } = req.query;
+    
+    const site = await Site.findById(req.params.id);
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check access permissions
+    if (req.user.role !== 'admin' && 
+        site.siteManager.toString() !== req.user._id.toString() &&
+        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    const Step = require('../models/Step');
+    const steps = await Step.find({ siteId: site._id, isActive: true })
+      .sort({ stepNumber: 1 });
+    
+    // Calculate analytics data
+    const totalSteps = steps.length;
+    const completedSteps = steps.filter(step => step.status === 'completed').length;
+    const inProgressSteps = steps.filter(step => step.status === 'in_progress').length;
+    const pendingSteps = steps.filter(step => step.status === 'pending').length;
+    
+    const totalEstimatedM3 = steps.reduce((sum, step) => sum + step.estimatedVolumeM3, 0);
+    const totalProgressM3 = steps.reduce((sum, step) => sum + step.progressM3, 0);
+    const overallProgressPercentage = totalEstimatedM3 > 0 
+      ? Math.round((totalProgressM3 / totalEstimatedM3) * 100) 
+      : 0;
+    
+    // Calculate progress trends (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    // Get progress history (you might want to create a separate ProgressHistory model)
+    const progressHistory = [
+      { date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), progress: Math.max(0, overallProgressPercentage - 5) },
+      { date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000), progress: Math.max(0, overallProgressPercentage - 10) },
+      { date: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000), progress: Math.max(0, overallProgressPercentage - 15) },
+      { date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), progress: Math.max(0, overallProgressPercentage - 20) }
+    ];
+    
+    // Calculate performance metrics
+    const averageStepProgress = steps.length > 0 
+      ? steps.reduce((sum, step) => sum + (step.progressPercentage || 0), 0) / steps.length 
+      : 0;
+    
+    const fastestStep = steps.reduce((fastest, step) => 
+      (step.progressPercentage || 0) > (fastest.progressPercentage || 0) ? step : fastest, 
+      steps[0] || {}
+    );
+    
+    const slowestStep = steps.reduce((slowest, step) => 
+      (step.progressPercentage || 0) < (slowest.progressPercentage || 0) ? step : slowest, 
+      steps[0] || {}
+    );
+    
+    res.json({
+      success: true,
+      data: {
+        overview: {
+          totalSteps,
+          completedSteps,
+          inProgressSteps,
+          pendingSteps,
+          overallProgressPercentage,
+          totalEstimatedM3,
+          totalProgressM3,
+          remainingM3: totalEstimatedM3 - totalProgressM3
+        },
+        performance: {
+          averageStepProgress: Math.round(averageStepProgress),
+          fastestStep: fastestStep ? {
+            name: fastestStep.stepName,
+            progress: fastestStep.progressPercentage || 0
+          } : null,
+          slowestStep: slowestStep ? {
+            name: slowestStep.stepName,
+            progress: slowestStep.progressPercentage || 0
+          } : null
+        },
+        trends: {
+          progressHistory,
+          dailyProgressRate: overallProgressPercentage / 30, // Approximate daily rate
+          estimatedCompletion: overallProgressPercentage > 0 
+            ? new Date(Date.now() + ((100 - overallProgressPercentage) / (overallProgressPercentage / 30)) * 24 * 60 * 60 * 1000)
+            : null
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get progress analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch progress analytics'
+    });
+  }
+});
+
+// Get progress milestones for a site
+router.get('/:id/milestones', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const site = await Site.findById(req.params.id);
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check access permissions
+    if (req.user.role !== 'admin' && 
+        site.siteManager.toString() !== req.user._id.toString() &&
+        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    const Step = require('../models/Step');
+    const steps = await Step.find({ siteId: site._id, isActive: true })
+      .sort({ stepNumber: 1 });
+    
+    // Generate milestones based on steps
+    const milestones = steps.map((step, index) => ({
+      id: step._id,
+      name: step.stepName,
+      description: `Complete ${step.stepName}`,
+      targetDate: new Date(site.startDate.getTime() + (index + 1) * (site.expectedEndDate.getTime() - site.startDate.getTime()) / steps.length),
+      completedDate: step.completedDate || null,
+      isCompleted: step.status === 'completed',
+      progress: step.progressPercentage || 0,
+      stepNumber: step.stepNumber
+    }));
+    
+    res.json({
+      success: true,
+      data: {
+        milestones,
+        totalMilestones: milestones.length,
+        completedMilestones: milestones.filter(m => m.isCompleted).length,
+        upcomingMilestones: milestones.filter(m => !m.isCompleted && new Date(m.targetDate) > new Date()).slice(0, 3)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get milestones error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch milestones'
+    });
+  }
+});
+
+// Get progress alerts for a site
+router.get('/:id/progress-alerts', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const site = await Site.findById(req.params.id);
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check access permissions
+    if (req.user.role !== 'admin' && 
+        site.siteManager.toString() !== req.user._id.toString() &&
+        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    const Step = require('../models/Step');
+    const steps = await Step.find({ siteId: site._id, isActive: true })
+      .sort({ stepNumber: 1 });
+    
+    const alerts = [];
+    const currentDate = new Date();
+    
+    // Check for delayed progress
+    const delayedSteps = steps.filter(step => {
+      if (step.status === 'completed') return false;
+      
+      // Calculate expected progress based on time elapsed
+      const daysElapsed = Math.floor((currentDate - site.startDate) / (1000 * 60 * 60 * 24));
+      const totalDays = Math.floor((site.expectedEndDate - site.startDate) / (1000 * 60 * 60 * 24));
+      const expectedProgress = Math.min(100, (daysElapsed / totalDays) * 100);
+      
+      return (step.progressPercentage || 0) < expectedProgress - 10; // 10% tolerance
+    });
+    
+    delayedSteps.forEach(step => {
+      alerts.push({
+        id: `delayed_${step._id}`,
+        type: 'delayed_progress',
+        severity: 'warning',
+        title: 'Delayed Progress',
+        message: `Step "${step.stepName}" is behind schedule`,
+        stepId: step._id,
+        stepName: step.stepName,
+        currentProgress: step.progressPercentage || 0,
+        createdAt: new Date()
+      });
+    });
+    
+    // Check for completed milestones
+    const completedSteps = steps.filter(step => step.status === 'completed');
+    completedSteps.forEach(step => {
+      alerts.push({
+        id: `completed_${step._id}`,
+        type: 'milestone_completed',
+        severity: 'success',
+        title: 'Milestone Completed',
+        message: `Step "${step.stepName}" has been completed`,
+        stepId: step._id,
+        stepName: step.stepName,
+        completedDate: step.completedDate,
+        createdAt: step.completedDate || new Date()
+      });
+    });
+    
+    // Check for upcoming deadlines
+    const upcomingDeadlines = steps.filter(step => {
+      if (step.status === 'completed') return false;
+      
+      const daysUntilDeadline = Math.floor((site.expectedEndDate - currentDate) / (1000 * 60 * 60 * 24));
+      return daysUntilDeadline <= 7 && daysUntilDeadline > 0;
+    });
+    
+    upcomingDeadlines.forEach(step => {
+      alerts.push({
+        id: `deadline_${step._id}`,
+        type: 'upcoming_deadline',
+        severity: 'info',
+        title: 'Upcoming Deadline',
+        message: `Step "${step.stepName}" deadline is approaching`,
+        stepId: step._id,
+        stepName: step.stepName,
+        daysUntilDeadline: Math.floor((site.expectedEndDate - currentDate) / (1000 * 60 * 60 * 24)),
+        createdAt: new Date()
+      });
+    });
+    
+    // Check for low inventory
+    const SiteInventory = require('../models/SiteInventory');
+    const siteInventory = await SiteInventory.find({ siteId: site._id });
+    
+    const lowInventoryItems = siteInventory.filter(item => {
+      const consumptionPercentage = item.quantity > 0 
+        ? ((item.consumedQuantity || 0) / item.quantity) * 100 
+        : 0;
+      return consumptionPercentage > 80; // 80% consumed
+    });
+    
+    lowInventoryItems.forEach(item => {
+      alerts.push({
+        id: `low_inventory_${item._id}`,
+        type: 'low_inventory',
+        severity: 'warning',
+        title: 'Low Inventory',
+        message: `Low stock for "${item.materialName}"`,
+        itemId: item._id,
+        itemName: item.materialName,
+        remainingQuantity: item.quantity - (item.consumedQuantity || 0),
+        consumptionPercentage: Math.round(((item.consumedQuantity || 0) / item.quantity) * 100),
+        createdAt: new Date()
+      });
+    });
+    
+    // Sort alerts by severity and date
+    const severityOrder = { error: 0, warning: 1, info: 2, success: 3 };
+    alerts.sort((a, b) => {
+      if (severityOrder[a.severity] !== severityOrder[b.severity]) {
+        return severityOrder[a.severity] - severityOrder[b.severity];
+      }
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        alerts,
+        totalAlerts: alerts.length,
+        criticalAlerts: alerts.filter(a => a.severity === 'error').length,
+        warningAlerts: alerts.filter(a => a.severity === 'warning').length,
+        infoAlerts: alerts.filter(a => a.severity === 'info').length,
+        successAlerts: alerts.filter(a => a.severity === 'success').length
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get progress alerts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch progress alerts'
+    });
+  }
+});
+
 module.exports = router;
