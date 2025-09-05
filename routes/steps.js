@@ -129,6 +129,168 @@ router.patch('/:id/dimensions', authenticateToken, requirePermission('site.updat
   }
 });
 
+// Update step estimated dimensions
+router.patch('/:id/estimated-dimensions', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { 
+      length, breadth, height, thickness, count, unit, 
+      additionalFields, notes 
+    } = req.body;
+    
+    const step = await Step.findById(req.params.id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    // Update estimated dimensions
+    step.estimatedDimensions = {
+      length: length !== undefined ? length : step.estimatedDimensions.length,
+      breadth: breadth !== undefined ? breadth : step.estimatedDimensions.breadth,
+      height: height !== undefined ? height : step.estimatedDimensions.height,
+      thickness: thickness !== undefined ? thickness : step.estimatedDimensions.thickness,
+      count: count !== undefined ? count : step.estimatedDimensions.count,
+      unit: unit || step.estimatedDimensions.unit,
+      additionalFields: additionalFields || step.estimatedDimensions.additionalFields
+    };
+    
+    if (notes) step.notes = notes;
+    
+    // Calculate progress from dimensions
+    const progressResult = step.calculateProgressFromDimensions();
+    
+    await step.save();
+    
+    res.json({
+      success: true,
+      message: 'Step estimated dimensions updated successfully',
+      data: { 
+        step,
+        progress: progressResult
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update step estimated dimensions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update step estimated dimensions'
+    });
+  }
+});
+
+// Update step completed dimensions
+router.patch('/:id/completed-dimensions', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { 
+      length, breadth, height, thickness, count, unit, 
+      additionalFields, notes 
+    } = req.body;
+    
+    const step = await Step.findById(req.params.id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    // Update completed dimensions
+    step.completedDimensions = {
+      length: length !== undefined ? length : step.completedDimensions.length,
+      breadth: breadth !== undefined ? breadth : step.completedDimensions.breadth,
+      height: height !== undefined ? height : step.completedDimensions.height,
+      thickness: thickness !== undefined ? thickness : step.completedDimensions.thickness,
+      count: count !== undefined ? count : step.completedDimensions.count,
+      unit: unit || step.completedDimensions.unit,
+      additionalFields: additionalFields || step.completedDimensions.additionalFields
+    };
+    
+    if (notes) step.notes = notes;
+    
+    // Calculate progress from dimensions
+    const progressResult = step.calculateProgressFromDimensions();
+    
+    await step.save();
+    
+    res.json({
+      success: true,
+      message: 'Step completed dimensions updated successfully',
+      data: { 
+        step,
+        progress: progressResult
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update step completed dimensions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update step completed dimensions'
+    });
+  }
+});
+
+// Get step type configuration
+router.get('/config/:stepType', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const { getStepTypeConfig } = require('../config/stepConfigurations');
+    const config = getStepTypeConfig(req.params.stepType);
+    
+    res.json({
+      success: true,
+      data: { config }
+    });
+    
+  } catch (error) {
+    console.error('Get step type config error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get step type configuration'
+    });
+  }
+});
+
+// Calculate volume for given dimensions
+router.post('/calculate-volume', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const { stepType, dimensions } = req.body;
+    
+    if (!stepType || !dimensions) {
+      return res.status(400).json({
+        success: false,
+        message: 'Step type and dimensions are required'
+      });
+    }
+    
+    // Create a temporary step instance for calculation
+    const tempStep = new Step({
+      stepType,
+      estimatedDimensions: dimensions
+    });
+    
+    const volumeResult = tempStep.calculateVolume(dimensions);
+    
+    res.json({
+      success: true,
+      data: { 
+        volume: volumeResult.volume,
+        unit: volumeResult.unit,
+        displayUnit: volumeResult.displayUnit
+      }
+    });
+    
+  } catch (error) {
+    console.error('Calculate volume error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to calculate volume'
+    });
+  }
+});
+
 // Update step status
 router.patch('/:id/status', authenticateToken, requirePermission('site.update'), async (req, res) => {
   try {

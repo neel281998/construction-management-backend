@@ -261,6 +261,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     }
     
     // Create steps for the site
+    const { createStepsForSite } = require('../config/stepConfigurations');
     const steps = await createStepsForSite(site._id, siteType, estimatedVolumeM3);
     
     // Create inventory items for each step
