@@ -18,7 +18,7 @@ const siteTypes = [
     type: 'BRIDGE',
     name: 'Bridge',
     description: 'Bridge construction with foundation and superstructure',
-    stepCount: 7
+    stepCount: 4
   },
   {
     type: 'DRAINAGE',
@@ -33,44 +33,44 @@ const stepConfigs = {
   BT_ROAD: [
     {
       stepNumber: 1,
-      stepName: 'Site Clearing',
-      primaryStock: 'Excavator',
-      secondaryStock: 'Dump Soil',
+      stepName: 'Site Preparation',
+      primaryStock: 'Excavation Equipment',
+      secondaryStock: 'Survey Equipment',
       defaultVolumeM3: 100
     },
     {
       stepNumber: 2,
       stepName: 'Subgrade Preparation',
-      primaryStock: 'Compactor',
-      secondaryStock: 'Granular Material',
+      primaryStock: 'Soil',
+      secondaryStock: 'Compaction Equipment',
       defaultVolumeM3: 80
     },
     {
       stepNumber: 3,
       stepName: 'Base Course',
-      primaryStock: 'Wet Mix Plant',
-      secondaryStock: 'Aggregate',
+      primaryStock: 'Aggregate',
+      secondaryStock: 'Bitumen',
       defaultVolumeM3: 120
     },
     {
       stepNumber: 4,
       stepName: 'Prime Coat',
-      primaryStock: 'Bitumen Sprayer',
-      secondaryStock: 'Bitumen',
+      primaryStock: 'Bitumen',
+      secondaryStock: 'Aggregate',
       defaultVolumeM3: 60
     },
     {
       stepNumber: 5,
       stepName: 'Tack Coat',
-      primaryStock: 'Bitumen Sprayer',
-      secondaryStock: 'Bitumen',
+      primaryStock: 'Bitumen',
+      secondaryStock: 'Aggregate',
       defaultVolumeM3: 40
     },
     {
       stepNumber: 6,
-      stepName: 'Wearing Course',
-      primaryStock: 'Paver',
-      secondaryStock: 'Bituminous Mix',
+      stepName: 'Bituminous Surface',
+      primaryStock: 'Bitumen',
+      secondaryStock: 'Aggregate',
       defaultVolumeM3: 80
     }
   ],
@@ -78,38 +78,38 @@ const stepConfigs = {
   CC_ROAD: [
     {
       stepNumber: 1,
-      stepName: 'Site Clearing',
-      primaryStock: 'Excavator',
-      secondaryStock: 'Dump Soil',
+      stepName: 'Site Preparation',
+      primaryStock: 'Excavation Equipment',
+      secondaryStock: 'Survey Equipment',
       defaultVolumeM3: 100
     },
     {
       stepNumber: 2,
       stepName: 'Subgrade Preparation',
-      primaryStock: 'Compactor',
-      secondaryStock: 'Granular Material',
+      primaryStock: 'Soil',
+      secondaryStock: 'Compaction Equipment',
       defaultVolumeM3: 80
     },
     {
       stepNumber: 3,
       stepName: 'Base Course',
-      primaryStock: 'Concrete Mixer',
-      secondaryStock: 'Aggregate',
+      primaryStock: 'Aggregate',
+      secondaryStock: 'Cement',
       defaultVolumeM3: 120
     },
     {
       stepNumber: 4,
-      stepName: 'Concrete Slab',
-      primaryStock: 'Concrete Mixer',
-      secondaryStock: 'Cement',
-      defaultVolumeM3: 150
+      stepName: 'Reinforcement Placement',
+      primaryStock: 'Reinforcement',
+      secondaryStock: 'Concrete',
+      defaultVolumeM3: 50
     },
     {
       stepNumber: 5,
-      stepName: 'Curing',
-      primaryStock: 'Water Tanker',
-      secondaryStock: 'Water',
-      defaultVolumeM3: 50
+      stepName: 'Concrete Surface',
+      primaryStock: 'Concrete',
+      secondaryStock: 'Reinforcement',
+      defaultVolumeM3: 150
     }
   ],
   
@@ -117,51 +117,30 @@ const stepConfigs = {
     {
       stepNumber: 1,
       stepName: 'Foundation',
-      primaryStock: 'Excavator',
-      secondaryStock: 'Cement',
+      primaryStock: 'Concrete',
+      secondaryStock: 'Reinforcement',
       defaultVolumeM3: 200
     },
     {
       stepNumber: 2,
-      stepName: 'Pile Foundation',
-      primaryStock: 'Pile Driver',
-      secondaryStock: 'Steel',
+      stepName: 'Piers/Columns',
+      primaryStock: 'Concrete',
+      secondaryStock: 'Reinforcement',
       defaultVolumeM3: 150
     },
     {
       stepNumber: 3,
-      stepName: 'Substructure',
-      primaryStock: 'Concrete Mixer',
+      stepName: 'Beams',
+      primaryStock: 'Concrete',
       secondaryStock: 'Reinforcement',
       defaultVolumeM3: 180
     },
     {
       stepNumber: 4,
-      stepName: 'Superstructure',
-      primaryStock: 'Crane',
-      secondaryStock: 'Precast Beams',
-      defaultVolumeM3: 220
-    },
-    {
-      stepNumber: 5,
       stepName: 'Deck Slab',
-      primaryStock: 'Concrete Mixer',
-      secondaryStock: 'Cement',
+      primaryStock: 'Concrete',
+      secondaryStock: 'Reinforcement',
       defaultVolumeM3: 160
-    },
-    {
-      stepNumber: 6,
-      stepName: 'Approach Roads',
-      primaryStock: 'Paver',
-      secondaryStock: 'Bituminous Mix',
-      defaultVolumeM3: 100
-    },
-    {
-      stepNumber: 7,
-      stepName: 'Finishing',
-      primaryStock: 'Finishing Equipment',
-      secondaryStock: 'Paint',
-      defaultVolumeM3: 40
     }
   ],
   

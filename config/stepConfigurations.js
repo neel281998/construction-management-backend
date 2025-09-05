@@ -43,6 +43,32 @@ const stepConfigurations = {
     },
     {
       stepNumber: 4,
+      stepName: 'Prime Coat',
+      stepType: 'road_surface',
+      primaryStock: 'Bitumen',
+      secondaryStock: 'Aggregate',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.02,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 5,
+      stepName: 'Tack Coat',
+      stepType: 'road_surface',
+      primaryStock: 'Bitumen',
+      secondaryStock: 'Aggregate',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.01,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 6,
       stepName: 'Bituminous Surface',
       stepType: 'road_surface',
       primaryStock: 'Bitumen',
@@ -99,6 +125,20 @@ const stepConfigurations = {
     },
     {
       stepNumber: 4,
+      stepName: 'Reinforcement Placement',
+      stepType: 'custom',
+      primaryStock: 'Reinforcement',
+      secondaryStock: 'Concrete',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        height: 0.2,
+        thickness: 0,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 5,
       stepName: 'Concrete Surface',
       stepType: 'slab',
       primaryStock: 'Concrete',
@@ -225,7 +265,7 @@ const stepConfigurations = {
 };
 
 // Function to create steps for a site based on site type
-const createStepsForSite = async (siteId, siteType, estimatedVolumeM3) => {
+const createStepsForSite = async (siteId, siteType) => {
   const Step = require('../models/Step');
   const stepConfig = stepConfigurations[siteType];
   
@@ -234,7 +274,6 @@ const createStepsForSite = async (siteId, siteType, estimatedVolumeM3) => {
   }
   
   const steps = [];
-  const volumePerStep = estimatedVolumeM3 / stepConfig.length;
   
   for (let i = 0; i < stepConfig.length; i++) {
     const config = stepConfig[i];
@@ -245,7 +284,7 @@ const createStepsForSite = async (siteId, siteType, estimatedVolumeM3) => {
       stepType: config.stepType,
       primaryStock: config.primaryStock,
       secondaryStock: config.secondaryStock,
-      estimatedVolumeM3: volumePerStep,
+      estimatedVolumeM3: 0, // Will be calculated from user input dimensions
       estimatedDimensions: {
         ...config.defaultDimensions,
         // Set default values that will be updated by user
@@ -257,9 +296,9 @@ const createStepsForSite = async (siteId, siteType, estimatedVolumeM3) => {
         unit: config.defaultDimensions.unit || 'm'
       },
       completedDimensions: {
-        length: 100,
-        breadth: 6,
-        height: 1,
+        length: 0,
+        breadth: 0,
+        height: 0,
         thickness: 0,
         count: 0,
         unit: config.defaultDimensions.unit || 'm'

@@ -293,7 +293,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     // Create steps for the site
     const { createStepsForSite } = require('../config/stepConfigurations');
-    const steps = await createStepsForSite(site._id, siteType, site.estimatedVolumeM3);
+    const steps = await createStepsForSite(site._id, siteType);
     
     // Create inventory items for each step
     await createSiteInventory(site._id, steps, req.user._id);
@@ -330,8 +330,8 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
   }
 });
 
-// Helper function to create steps for a site
-async function createStepsForSite(siteId, siteType, totalVolumeM3) {
+// Helper function to create steps for a site (legacy - now using stepConfigurations.js)
+async function createStepsForSiteLegacy(siteId, siteType, totalVolumeM3) {
   try {
     const { getStepsForSiteType } = require('../config/siteTypes');
     const steps = getStepsForSiteType(siteType);
