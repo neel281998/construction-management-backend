@@ -265,6 +265,14 @@ router.post('/calculate-volume', authenticateToken, requirePermission('site.read
       });
     }
     
+    // Validate dimensions
+    if (!dimensions.length || !dimensions.breadth || !dimensions.height) {
+      return res.status(400).json({
+        success: false,
+        message: 'Length, breadth, and height are required'
+      });
+    }
+    
     // Create a temporary step instance for calculation
     const tempStep = new Step({
       stepType,
@@ -286,7 +294,8 @@ router.post('/calculate-volume', authenticateToken, requirePermission('site.read
     console.error('Calculate volume error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to calculate volume'
+      message: 'Failed to calculate volume',
+      error: error.message
     });
   }
 });

@@ -254,13 +254,17 @@ stepSchema.methods.calculateProgressFromDimensions = function() {
   const completedVolume = this.calculateVolume(this.completedDimensions);
   this.volumeCalculations.completedVolume = completedVolume.volume;
   
-  // Update progress
-  this.progressM3 = completedVolume.volume;
-  this.estimatedVolumeM3 = estimatedVolume.volume;
+  // Update progress - use the larger of existing progressM3 or calculated volume
+  this.progressM3 = Math.max(this.progressM3 || 0, completedVolume.volume);
+  
+  // Only update estimatedVolumeM3 if it's not already set or if calculated volume is larger
+  if (!this.estimatedVolumeM3 || this.estimatedVolumeM3 === 0) {
+    this.estimatedVolumeM3 = estimatedVolume.volume;
+  }
   
   // Calculate progress percentage
-  this.progressPercentage = estimatedVolume.volume > 0 
-    ? Math.min((completedVolume.volume / estimatedVolume.volume) * 100, 100)
+  this.progressPercentage = this.estimatedVolumeM3 > 0 
+    ? Math.min((this.progressM3 / this.estimatedVolumeM3) * 100, 100)
     : 0;
   
   // Update status based on progress
@@ -276,8 +280,8 @@ stepSchema.methods.calculateProgressFromDimensions = function() {
     progressM3: this.progressM3,
     progressPercentage: this.progressPercentage,
     status: this.status,
-    estimatedVolume: estimatedVolume.volume,
-    completedVolume: completedVolume.volume,
+    estimatedVolume: this.estimatedVolumeM3,
+    completedVolume: this.progressM3,
     volumeUnit: estimatedVolume.unit
   };
 };

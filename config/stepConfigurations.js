@@ -8,9 +8,9 @@ const stepConfigurations = {
       primaryStock: 'Excavation Equipment',
       secondaryStock: 'Survey Equipment',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
-        height: 0,
+        length: 100,
+        breadth: 6,
+        height: 1,
         thickness: 0,
         unit: 'm'
       }
@@ -22,8 +22,8 @@ const stepConfigurations = {
       primaryStock: 'Soil',
       secondaryStock: 'Compaction Equipment',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 0.3,
         unit: 'm'
       }
@@ -35,8 +35,8 @@ const stepConfigurations = {
       primaryStock: 'Aggregate',
       secondaryStock: 'Bitumen',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 0.2,
         unit: 'm'
       }
@@ -48,8 +48,8 @@ const stepConfigurations = {
       primaryStock: 'Bitumen',
       secondaryStock: 'Aggregate',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 0.05,
         unit: 'm'
       }
@@ -64,9 +64,9 @@ const stepConfigurations = {
       primaryStock: 'Excavation Equipment',
       secondaryStock: 'Survey Equipment',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
-        height: 0,
+        length: 100,
+        breadth: 6,
+        height: 1,
         thickness: 0,
         unit: 'm'
       }
@@ -78,8 +78,8 @@ const stepConfigurations = {
       primaryStock: 'Soil',
       secondaryStock: 'Compaction Equipment',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 0.3,
         unit: 'm'
       }
@@ -91,8 +91,8 @@ const stepConfigurations = {
       primaryStock: 'Aggregate',
       secondaryStock: 'Cement',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 0.15,
         unit: 'm'
       }
@@ -104,8 +104,8 @@ const stepConfigurations = {
       primaryStock: 'Concrete',
       secondaryStock: 'Reinforcement',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 0.2,
         unit: 'm'
       }
@@ -120,8 +120,8 @@ const stepConfigurations = {
       primaryStock: 'Concrete',
       secondaryStock: 'Reinforcement',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 1.0,
         unit: 'm'
       }
@@ -136,7 +136,7 @@ const stepConfigurations = {
         count: 0,
         length: 0.8,
         breadth: 0.8,
-        height: 0,
+        height: 1,
         unit: 'm'
       }
     },
@@ -160,8 +160,8 @@ const stepConfigurations = {
       primaryStock: 'Concrete',
       secondaryStock: 'Reinforcement',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 0.25,
         unit: 'm'
       }
@@ -176,9 +176,9 @@ const stepConfigurations = {
       primaryStock: 'Excavation Equipment',
       secondaryStock: 'Survey Equipment',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
-        height: 0,
+        length: 100,
+        breadth: 6,
+        height: 1,
         unit: 'm'
       }
     },
@@ -202,9 +202,9 @@ const stepConfigurations = {
       primaryStock: 'Soil',
       secondaryStock: 'Compaction Equipment',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
-        height: 0,
+        length: 100,
+        breadth: 6,
+        height: 1,
         unit: 'm'
       }
     },
@@ -215,8 +215,8 @@ const stepConfigurations = {
       primaryStock: 'Asphalt/Concrete',
       secondaryStock: 'Compaction Equipment',
       defaultDimensions: {
-        length: 0,
-        breadth: 0,
+        length: 100,
+        breadth: 6,
         thickness: 0.1,
         unit: 'm'
       }
@@ -257,9 +257,9 @@ const createStepsForSite = async (siteId, siteType, estimatedVolumeM3) => {
         unit: config.defaultDimensions.unit || 'm'
       },
       completedDimensions: {
-        length: 0,
-        breadth: 0,
-        height: 0,
+        length: 100,
+        breadth: 6,
+        height: 1,
         thickness: 0,
         count: 0,
         unit: config.defaultDimensions.unit || 'm'
