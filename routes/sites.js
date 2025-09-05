@@ -206,7 +206,8 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       estimatedVolumeM3,
       siteManagerId,
       inventoryManagerId,
-      assignedVehicleIds
+      assignedVehicleIds,
+      projectDimensions
     } = req.body;
     
     // Validate site type
@@ -232,6 +233,21 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       });
     }
     
+    // Validate project dimensions
+    if (!projectDimensions || !projectDimensions.length || !projectDimensions.breadth || !projectDimensions.height) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project dimensions (length, breadth, height) are required'
+      });
+    }
+    
+    if (projectDimensions.length <= 0 || projectDimensions.breadth <= 0 || projectDimensions.height <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project dimensions must be greater than 0'
+      });
+    }
+    
     const siteData = {
       name,
       siteType,
@@ -242,6 +258,12 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       estimatedVolumeM3,
       siteManager: siteManagerId,
       inventoryManager: inventoryManagerId,
+      projectDimensions: {
+        length: projectDimensions.length,
+        breadth: projectDimensions.breadth,
+        height: projectDimensions.height,
+        unit: projectDimensions.unit || 'm'
+      },
       assignedVehicles: assignedVehicleIds ? assignedVehicleIds.map(vehicleId => ({
         vehicle: vehicleId,
         assignedDate: new Date()
@@ -249,6 +271,15 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     };
     
     const site = new Site(siteData);
+    
+    // Calculate project volume from dimensions
+    const projectVolume = site.calculateProjectVolume();
+    
+    // Use calculated volume if estimatedVolumeM3 is not provided or is 0
+    if (!estimatedVolumeM3 || estimatedVolumeM3 === 0) {
+      site.estimatedVolumeM3 = projectVolume;
+    }
+    
     await site.save();
     
     // Update vehicle statuses to 'in_use' if vehicles are assigned
@@ -262,7 +293,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     // Create steps for the site
     const { createStepsForSite } = require('../config/stepConfigurations');
-    const steps = await createStepsForSite(site._id, siteType, estimatedVolumeM3);
+    const steps = await createStepsForSite(site._id, siteType, site.estimatedVolumeM3);
     
     // Create inventory items for each step
     await createSiteInventory(site._id, steps, req.user._id);
@@ -969,6 +1000,55 @@ router.get('/:id/progress-alerts', authenticateToken, requirePermission('site.re
     res.status(500).json({
       success: false,
       message: 'Failed to fetch progress alerts'
+    });
+  }
+});
+
+// Recalculate site progress based on step progress
+router.post('/:id/recalculate-progress', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const site = await Site.findById(req.params.id);
+    
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check access permissions
+    if (req.user.role !== 'admin' && 
+        site.siteManager.toString() !== req.user._id.toString() &&
+        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    // Calculate overall progress
+    const progressResult = await site.calculateOverallProgress();
+    await site.save();
+    
+    res.json({
+      success: true,
+      message: 'Site progress recalculated successfully',
+      data: {
+        site: {
+          _id: site._id,
+          name: site.name,
+          progress: progressResult.progress,
+          totalProgressM3: progressResult.totalProgressM3,
+          estimatedVolumeM3: progressResult.estimatedVolumeM3
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Recalculate progress error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to recalculate site progress'
     });
   }
 });

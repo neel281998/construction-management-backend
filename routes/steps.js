@@ -163,6 +163,14 @@ router.patch('/:id/estimated-dimensions', authenticateToken, requirePermission('
     
     await step.save();
     
+    // Recalculate site progress
+    const Site = require('../models/Site');
+    const site = await Site.findById(step.siteId);
+    if (site) {
+      await site.calculateOverallProgress();
+      await site.save();
+    }
+    
     res.json({
       success: true,
       message: 'Step estimated dimensions updated successfully',
@@ -214,6 +222,14 @@ router.patch('/:id/completed-dimensions', authenticateToken, requirePermission('
     const progressResult = step.calculateProgressFromDimensions();
     
     await step.save();
+    
+    // Recalculate site progress
+    const Site = require('../models/Site');
+    const site = await Site.findById(step.siteId);
+    if (site) {
+      await site.calculateOverallProgress();
+      await site.save();
+    }
     
     res.json({
       success: true,

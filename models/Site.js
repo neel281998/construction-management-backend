@@ -155,6 +155,33 @@ const siteSchema = new mongoose.Schema({
     required: [true, 'Estimated volume is required'],
     min: [0, 'Estimated volume cannot be negative']
   },
+  // Project specification dimensions
+  projectDimensions: {
+    length: {
+      type: Number,
+      required: [true, 'Project length is required'],
+      min: [0, 'Length cannot be negative']
+    },
+    breadth: {
+      type: Number,
+      required: [true, 'Project breadth is required'],
+      min: [0, 'Breadth cannot be negative']
+    },
+    height: {
+      type: Number,
+      required: [true, 'Project height is required'],
+      min: [0, 'Height cannot be negative']
+    },
+    unit: {
+      type: String,
+      enum: ['mm', 'cm', 'm', 'km', 'in', 'ft', 'yd', 'mi'],
+      default: 'm'
+    },
+    totalVolume: {
+      type: Number,
+      default: 0
+    }
+  },
   currentStep: {
     type: Number,
     default: 1,
@@ -198,6 +225,95 @@ siteSchema.virtual('daysRemaining').get(function() {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return Math.max(0, diffDays);
 });
+
+// Method to calculate total volume from project dimensions
+siteSchema.methods.calculateProjectVolume = function() {
+  if (!this.projectDimensions || !this.projectDimensions.length || !this.projectDimensions.breadth || !this.projectDimensions.height) {
+    return 0;
+  }
+
+  // Convert to meters for calculation
+  const lengthInMeters = this.convertToMeters(this.projectDimensions.length, this.projectDimensions.unit);
+  const breadthInMeters = this.convertToMeters(this.projectDimensions.breadth, this.projectDimensions.unit);
+  const heightInMeters = this.convertToMeters(this.projectDimensions.height, this.projectDimensions.unit);
+
+  const volumeInM3 = lengthInMeters * breadthInMeters * heightInMeters;
+  
+  // Update the totalVolume field
+  this.projectDimensions.totalVolume = volumeInM3;
+  
+  return volumeInM3;
+};
+
+// Helper method to convert units to meters
+siteSchema.methods.convertToMeters = function(value, unit) {
+  const conversions = {
+    'mm': 0.001,
+    'cm': 0.01,
+    'm': 1,
+    'km': 1000,
+    'in': 0.0254,
+    'ft': 0.3048,
+    'yd': 0.9144,
+    'mi': 1609.34
+  };
+  
+  return value * (conversions[unit] || 1);
+};
+
+// Method to calculate overall site progress based on step progress
+siteSchema.methods.calculateOverallProgress = async function() {
+  const Step = require('./Step');
+  
+  try {
+    const steps = await Step.find({ siteId: this._id });
+    
+    if (steps.length === 0) {
+      this.progress = 0;
+      this.totalProgressM3 = 0;
+      return { progress: 0, totalProgressM3: 0 };
+    }
+
+    let totalEstimatedVolume = 0;
+    let totalCompletedVolume = 0;
+
+    steps.forEach(step => {
+      // Use step's estimated volume or calculate from dimensions
+      const stepEstimatedVolume = step.estimatedVolumeM3 || 
+        (step.estimatedDimensions ? 
+          this.convertToMeters(step.estimatedDimensions.length, step.estimatedDimensions.unit) *
+          this.convertToMeters(step.estimatedDimensions.breadth, step.estimatedDimensions.unit) *
+          this.convertToMeters(step.estimatedDimensions.height, step.estimatedDimensions.unit) : 0);
+      
+      const stepCompletedVolume = step.progressM3 || 
+        (step.completedDimensions ? 
+          this.convertToMeters(step.completedDimensions.length, step.completedDimensions.unit) *
+          this.convertToMeters(step.completedDimensions.breadth, step.completedDimensions.unit) *
+          this.convertToMeters(step.completedDimensions.height, step.completedDimensions.unit) : 0);
+
+      totalEstimatedVolume += stepEstimatedVolume;
+      totalCompletedVolume += stepCompletedVolume;
+    });
+
+    // Calculate progress percentage
+    const progressPercentage = totalEstimatedVolume > 0 ? 
+      Math.min((totalCompletedVolume / totalEstimatedVolume) * 100, 100) : 0;
+
+    // Update site progress
+    this.progress = Math.round(progressPercentage * 100) / 100; // Round to 2 decimal places
+    this.totalProgressM3 = totalCompletedVolume;
+    this.estimatedVolumeM3 = totalEstimatedVolume;
+
+    return {
+      progress: this.progress,
+      totalProgressM3: this.totalProgressM3,
+      estimatedVolumeM3: this.estimatedVolumeM3
+    };
+  } catch (error) {
+    console.error('Error calculating overall progress:', error);
+    return { progress: 0, totalProgressM3: 0 };
+  }
+};
 
 // Index for performance
 siteSchema.index({ status: 1 });
