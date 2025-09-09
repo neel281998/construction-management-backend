@@ -196,7 +196,7 @@ router.get('/:id/progress', authenticateToken, requirePermission('site.read'), a
 // Create new site
 router.post('/', authenticateToken, requirePermission('site.create'), async (req, res) => {
   try {
-    const { 
+        const {
       name, 
       siteType, 
       description, 
@@ -207,14 +207,35 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       siteManagerId,
       inventoryManagerId,
       assignedVehicleIds,
-      projectDimensions
+      projectDimensions,
+      stepData
     } = req.body;
     
-    // Validate site type
-    if (!['BT_ROAD', 'CC_ROAD', 'BRIDGE', 'DRAINAGE'].includes(siteType)) {
+    // Validate site types (support both single and multiple)
+    const validSiteTypes = ['BT_ROAD', 'CC_ROAD', 'BRIDGE', 'DRAINAGE'];
+    let siteTypesArray = [];
+    
+    if (Array.isArray(siteType)) {
+      // Multiple site types
+      siteTypesArray = siteType;
+    } else {
+      // Single site type (backward compatibility)
+      siteTypesArray = [siteType];
+    }
+    
+    // Validate all site types
+    const invalidTypes = siteTypesArray.filter(type => !validSiteTypes.includes(type));
+    if (invalidTypes.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid site type'
+        message: `Invalid site types: ${invalidTypes.join(', ')}`
+      });
+    }
+    
+    if (siteTypesArray.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one site type is required'
       });
     }
     
@@ -250,7 +271,8 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     const siteData = {
       name,
-      siteType,
+      siteTypes: siteTypesArray,
+      siteType: siteTypesArray[0], // Keep first type for backward compatibility
       description,
       address,
       startDate,
@@ -293,7 +315,18 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     // Create steps for the site
     const { createStepsForSite } = require('../config/stepConfigurations');
-    const steps = await createStepsForSite(site._id, siteType);
+    let steps = [];
+    
+    if (stepData && stepData.length > 0) {
+      // Use provided step data with dimensions
+      steps = await createStepsWithData(site._id, siteTypesArray, stepData);
+    } else {
+      // Use default step creation for each site type
+      for (const siteType of siteTypesArray) {
+        const typeSteps = await createStepsForSite(site._id, siteType);
+        steps = steps.concat(typeSteps);
+      }
+    }
     
     // Create inventory items for each step
     await createSiteInventory(site._id, steps, req.user._id);
@@ -358,6 +391,62 @@ async function createStepsForSiteLegacy(siteId, siteType, totalVolumeM3) {
     return createdSteps;
   } catch (error) {
     console.error('Error creating steps for site:', error);
+    throw error;
+  }
+}
+
+// Helper function to create steps with provided data
+async function createStepsWithData(siteId, siteTypes, stepDataArray) {
+  try {
+    const stepPromises = stepDataArray.map(stepData => {
+      const newStep = new Step({
+        siteId,
+        stepNumber: stepData.stepNumber,
+        stepName: stepData.stepName,
+        stepType: stepData.stepType,
+        primaryStock: stepData.primaryStock,
+        secondaryStock: stepData.secondaryStock,
+        estimatedVolumeM3: stepData.estimatedVolumeM3 || 0,
+        estimatedDimensions: {
+          length: stepData.estimatedDimensions?.length || 0,
+          breadth: stepData.estimatedDimensions?.breadth || 0,
+          height: stepData.estimatedDimensions?.height || 0,
+          thickness: stepData.estimatedDimensions?.thickness || 0,
+          count: stepData.estimatedDimensions?.count || 1,
+          unit: stepData.estimatedDimensions?.unit || 'm',
+          additionalFields: new Map()
+        },
+        completedDimensions: {
+          length: 0,
+          breadth: 0,
+          height: 0,
+          thickness: 0,
+          count: 0,
+          unit: stepData.estimatedDimensions?.unit || 'm',
+          additionalFields: new Map()
+        },
+        volumeCalculations: {
+          estimatedVolume: stepData.estimatedVolumeM3 || 0,
+          completedVolume: 0,
+          volumeUnit: 'm³'
+        },
+        // Assign users if provided
+        assignedUsers: stepData.assignedUsers ? stepData.assignedUsers.map(userId => ({
+          user: userId,
+          assignedDate: new Date(),
+          role: 'worker',
+          isActive: true
+        })) : [],
+        status: 'pending'
+      });
+      
+      return newStep.save();
+    });
+    
+    const createdSteps = await Promise.all(stepPromises);
+    return createdSteps;
+  } catch (error) {
+    console.error('Error creating steps with data:', error);
     throw error;
   }
 }
@@ -1049,6 +1138,79 @@ router.post('/:id/recalculate-progress', authenticateToken, requirePermission('s
     res.status(500).json({
       success: false,
       message: 'Failed to recalculate site progress'
+    });
+  }
+});
+
+// Get site types
+router.get('/site-types', authenticateToken, async (req, res) => {
+  try {
+    const { getSiteTypes } = require('../config/siteTypes');
+    const siteTypes = getSiteTypes();
+    
+    res.json({
+      success: true,
+      data: { siteTypes }
+    });
+  } catch (error) {
+    console.error('Error fetching site types:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch site types'
+    });
+  }
+});
+
+// Get site type configuration
+router.get('/site-types/:siteType', authenticateToken, async (req, res) => {
+  try {
+    const { siteType } = req.params;
+    const { getSiteTypeConfig } = require('../config/siteTypes');
+    const config = getSiteTypeConfig(siteType);
+    
+    if (!config) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site type not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: { config }
+    });
+  } catch (error) {
+    console.error('Error fetching site type config:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch site type configuration'
+    });
+  }
+});
+
+// Get step configurations for a site type
+router.get('/step-configurations/:siteType', authenticateToken, async (req, res) => {
+  try {
+    const { siteType } = req.params;
+    const { stepConfigurations } = require('../config/stepConfigurations');
+    const config = stepConfigurations[siteType];
+    
+    if (!config) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step configurations not found for this site type'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: { stepConfigurations: config }
+    });
+  } catch (error) {
+    console.error('Error fetching step configurations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch step configurations'
     });
   }
 });

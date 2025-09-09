@@ -103,6 +103,32 @@ const stepSchema = new mongoose.Schema({
   notes: {
     type: String
   },
+  // Step assignment to users
+  assignedUsers: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    assignedDate: {
+      type: Date,
+      default: Date.now
+    },
+    role: {
+      type: String,
+      enum: ['primary', 'secondary', 'supervisor', 'worker'],
+      default: 'worker'
+    },
+    isActive: {
+      type: Boolean,
+      default: true
+    }
+  }],
+  // Primary assigned user (for backward compatibility)
+  assignedUser: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   isActive: {
     type: Boolean,
     default: true

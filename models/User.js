@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Role is required'],
     enum: {
-      values: ['admin', 'site_manager', 'supervisor', 'worker', 'inventory_manager', 'inventory_assistant'],
+      values: ['admin', 'site_manager', 'supervisor', 'worker', 'inventory_manager', 'inventory_assistant', 'step_manager'],
       message: 'Invalid role specified'
     },
     default: 'worker'
@@ -194,6 +194,12 @@ userSchema.pre('save', function(next) {
     ],
     inventory_assistant: [
       'inventory.read', 'inventory.update'
+    ],
+    step_manager: [
+      'step.create', 'step.read', 'step.update', 'step.delete',
+      'site.read', // Can read sites to manage steps
+      'user.read', // Can read users to assign to steps
+      'report.generate' // Can generate step reports
     ]
   };
   

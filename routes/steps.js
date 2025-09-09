@@ -7,6 +7,7 @@ const Step = require('../models/Step');
 router.get('/site/:siteId', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
     const steps = await Step.find({ siteId: req.params.siteId, isActive: true })
+      .populate('assignedUsers.user', 'firstName lastName email role')
       .sort({ stepNumber: 1 });
     
     res.json({
@@ -25,7 +26,8 @@ router.get('/site/:siteId', authenticateToken, requirePermission('site.read'), a
 // Get a single step
 router.get('/:id', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
-    const step = await Step.findById(req.params.id);
+    const step = await Step.findById(req.params.id)
+      .populate('assignedUsers.user', 'firstName lastName email role');
     
     if (!step) {
       return res.status(404).json({
@@ -354,6 +356,165 @@ router.patch('/:id/status', authenticateToken, requirePermission('site.update'),
     res.status(500).json({
       success: false,
       message: 'Failed to update step status'
+    });
+  }
+});
+
+// Assign users to a step
+router.post('/:id/assign-users', authenticateToken, requirePermission('step.update'), async (req, res) => {
+  try {
+    const { userIds, role = 'worker' } = req.body;
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'User IDs array is required'
+      });
+    }
+    
+    const step = await Step.findById(req.params.id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    // Add new user assignments
+    const newAssignments = userIds.map(userId => ({
+      user: userId,
+      assignedDate: new Date(),
+      role: role,
+      isActive: true
+    }));
+    
+    step.assignedUsers = step.assignedUsers.concat(newAssignments);
+    await step.save();
+    
+    await step.populate('assignedUsers.user', 'firstName lastName email role');
+    
+    res.json({
+      success: true,
+      message: 'Users assigned to step successfully',
+      data: { step }
+    });
+    
+  } catch (error) {
+    console.error('Assign users to step error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to assign users to step'
+    });
+  }
+});
+
+// Remove user from step
+router.delete('/:id/assign-users/:userId', authenticateToken, requirePermission('step.update'), async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+    
+    const step = await Step.findById(id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    // Remove user assignment
+    step.assignedUsers = step.assignedUsers.filter(
+      assignment => assignment.user.toString() !== userId
+    );
+    
+    await step.save();
+    await step.populate('assignedUsers.user', 'firstName lastName email role');
+    
+    res.json({
+      success: true,
+      message: 'User removed from step successfully',
+      data: { step }
+    });
+    
+  } catch (error) {
+    console.error('Remove user from step error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to remove user from step'
+    });
+  }
+});
+
+// Update user role in step
+router.patch('/:id/assign-users/:userId/role', authenticateToken, requirePermission('step.update'), async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+    const { role } = req.body;
+    
+    if (!['primary', 'secondary', 'supervisor', 'worker'].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role'
+      });
+    }
+    
+    const step = await Step.findById(id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    // Update user role
+    const assignment = step.assignedUsers.find(
+      assignment => assignment.user.toString() === userId
+    );
+    
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not assigned to this step'
+      });
+    }
+    
+    assignment.role = role;
+    await step.save();
+    await step.populate('assignedUsers.user', 'firstName lastName email role');
+    
+    res.json({
+      success: true,
+      message: 'User role updated successfully',
+      data: { step }
+    });
+    
+  } catch (error) {
+    console.error('Update user role in step error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update user role in step'
+    });
+  }
+});
+
+// Get available users for step assignment
+router.get('/available-users', authenticateToken, requirePermission('user.read'), async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const users = await User.find({ 
+      isActive: true,
+      role: { $in: ['worker', 'supervisor', 'step_manager'] }
+    }).select('firstName lastName email role');
+    
+    res.json({
+      success: true,
+      data: { users }
+    });
+    
+  } catch (error) {
+    console.error('Get available users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available users'
     });
   }
 });

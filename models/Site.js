@@ -7,13 +7,20 @@ const siteSchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'Site name cannot exceed 100 characters']
   },
+  siteTypes: [{
+    type: String,
+    enum: {
+      values: ['BT_ROAD', 'CC_ROAD', 'BRIDGE', 'DRAINAGE'],
+      message: 'Invalid site type'
+    }
+  }],
+  // Keep siteType for backward compatibility
   siteType: {
     type: String,
     enum: {
       values: ['BT_ROAD', 'CC_ROAD', 'BRIDGE', 'DRAINAGE'],
       message: 'Invalid site type'
-    },
-    required: [true, 'Site type is required']
+    }
   },
   description: {
     type: String,
