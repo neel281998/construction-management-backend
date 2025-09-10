@@ -23,6 +23,29 @@ router.get('/site/:siteId', authenticateToken, requirePermission('site.read'), a
   }
 });
 
+// Get available step managers (must be before /:id route)
+router.get('/available-step-managers', authenticateToken, requirePermission('user.read'), async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const stepManagers = await User.find({ 
+      isActive: true,
+      role: 'step_manager'
+    }).select('firstName lastName email role');
+    
+    res.json({
+      success: true,
+      data: { stepManagers }
+    });
+    
+  } catch (error) {
+    console.error('Get available step managers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available step managers'
+    });
+  }
+});
+
 // Get a single step
 router.get('/:id', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
@@ -515,29 +538,6 @@ router.get('/available-users', authenticateToken, requirePermission('user.read')
     res.status(500).json({
       success: false,
       message: 'Failed to fetch available users'
-    });
-  }
-});
-
-// Get available step managers
-router.get('/available-step-managers', authenticateToken, requirePermission('user.read'), async (req, res) => {
-  try {
-    const User = require('../models/User');
-    const stepManagers = await User.find({ 
-      isActive: true,
-      role: 'step_manager'
-    }).select('firstName lastName email role');
-    
-    res.json({
-      success: true,
-      data: { stepManagers }
-    });
-    
-  } catch (error) {
-    console.error('Get available step managers error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch available step managers'
     });
   }
 });
