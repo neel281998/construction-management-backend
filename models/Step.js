@@ -135,6 +135,12 @@ const stepSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
+  // Step manager assignment
+  stepManager: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
   isActive: {
     type: Boolean,
     default: true

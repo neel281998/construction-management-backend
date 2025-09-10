@@ -519,4 +519,106 @@ router.get('/available-users', authenticateToken, requirePermission('user.read')
   }
 });
 
+// Get available step managers
+router.get('/available-step-managers', authenticateToken, requirePermission('user.read'), async (req, res) => {
+  try {
+    const User = require('../models/User');
+    const stepManagers = await User.find({ 
+      isActive: true,
+      role: 'step_manager'
+    }).select('firstName lastName email role');
+    
+    res.json({
+      success: true,
+      data: { stepManagers }
+    });
+    
+  } catch (error) {
+    console.error('Get available step managers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available step managers'
+    });
+  }
+});
+
+// Assign step manager to a step
+router.patch('/:id/assign-step-manager', authenticateToken, requirePermission('step.update'), async (req, res) => {
+  try {
+    const { stepManagerId } = req.body;
+    
+    if (!stepManagerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Step manager ID is required'
+      });
+    }
+    
+    const step = await Step.findById(req.params.id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    // Verify the user is a step manager
+    const User = require('../models/User');
+    const stepManager = await User.findById(stepManagerId);
+    if (!stepManager || stepManager.role !== 'step_manager') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid step manager'
+      });
+    }
+    
+    step.stepManager = stepManagerId;
+    await step.save();
+    
+    await step.populate('stepManager', 'firstName lastName email role');
+    
+    res.json({
+      success: true,
+      message: 'Step manager assigned successfully',
+      data: { step }
+    });
+    
+  } catch (error) {
+    console.error('Assign step manager error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to assign step manager'
+    });
+  }
+});
+
+// Remove step manager from a step
+router.delete('/:id/step-manager', authenticateToken, requirePermission('step.update'), async (req, res) => {
+  try {
+    const step = await Step.findById(req.params.id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    step.stepManager = null;
+    await step.save();
+    
+    res.json({
+      success: true,
+      message: 'Step manager removed successfully',
+      data: { step }
+    });
+    
+  } catch (error) {
+    console.error('Remove step manager error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to remove step manager'
+    });
+  }
+});
+
 module.exports = router;
