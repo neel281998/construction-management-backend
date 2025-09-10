@@ -20,6 +20,12 @@ const stepSchema = new mongoose.Schema({
     required: true,
     default: 'custom'
   },
+  // Site type this step belongs to (for multi-site-type projects)
+  siteType: {
+    type: String,
+    enum: ['BT_ROAD', 'CC_ROAD', 'BRIDGE', 'DRAINAGE'],
+    required: false
+  },
   primaryStock: {
     type: String,
     required: true

@@ -437,6 +437,8 @@ async function createStepsWithData(siteId, siteTypes, stepDataArray) {
           role: 'worker',
           isActive: true
         })) : [],
+        // Store the site type this step belongs to
+        siteType: stepData.siteType || siteTypes[0],
         status: 'pending'
       });
       
