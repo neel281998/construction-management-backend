@@ -10,7 +10,6 @@ const userRoutes = require('../routes/users');
 const siteRoutes = require('../routes/sites');
 const vehicleRoutes = require('../routes/vehicles');
 const inventoryRoutes = require('../routes/inventory');
-const locationRoutes = require('../routes/locations');
 const attendanceRoutes = require('../routes/attendance');
 const uploadRoutes = require('../routes/upload');
 const siteTypeRoutes = require('../routes/siteTypes');
@@ -146,7 +145,6 @@ app.get('/', (req, res) => {
       sites: '/api/sites',
       vehicles: '/api/vehicles',
       inventory: '/api/inventory',
-      locations: '/api/locations',
       attendance: '/api/attendance',
       upload: '/api/upload',
       siteTypes: '/api/site-types',
@@ -163,7 +161,6 @@ app.use('/api/users', userRoutes);
 app.use('/api/sites', siteRoutes);
 app.use('/api/vehicles', vehicleRoutes);
 app.use('/api/inventory', inventoryRoutes);
-app.use('/api/locations', locationRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/site-types', siteTypeRoutes);

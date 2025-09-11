@@ -92,15 +92,9 @@ const inventorySchema = new mongoose.Schema({
       trim: true
     }
   },
-  locationId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Location',
-    required: [true, 'Location is required']
-  },
-  // Keep location field for backward compatibility and specific storage area within location
   location: {
     type: String,
-    required: [true, 'Storage location/area is required'],
+    required: [true, 'Storage location is required'],
     trim: true,
     maxlength: [100, 'Location cannot exceed 100 characters']
   },
@@ -200,9 +194,6 @@ inventorySchema.methods.consumeStock = function(quantity, consumedBy, notes = ''
 inventorySchema.index({ itemCode: 1 });
 inventorySchema.index({ category: 1 });
 inventorySchema.index({ currentStock: 1, minimumStock: 1 });
-inventorySchema.index({ locationId: 1 });
-inventorySchema.index({ locationId: 1, category: 1 });
-inventorySchema.index({ locationId: 1, isActive: 1 });
 inventorySchema.index({ isActive: 1 });
 
 module.exports = mongoose.model('Inventory', inventorySchema);

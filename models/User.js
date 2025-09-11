@@ -80,25 +80,6 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Site'
   }],
-  assignedLocations: [{
-    location: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Location',
-      required: true
-    },
-    assignedDate: {
-      type: Date,
-      default: Date.now
-    },
-    isPrimary: {
-      type: Boolean,
-      default: false
-    },
-    permissions: [{
-      type: String,
-      enum: ['read', 'write', 'delete', 'approve', 'transfer']
-    }]
-  }],
   deviceTokens: [{
     token: String,
     platform: {
@@ -209,7 +190,6 @@ userSchema.pre('save', function(next) {
     ],
     inventory_manager: [
       'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-      'location.read', 'location.update',
       'report.generate'
     ],
     inventory_assistant: [
@@ -232,6 +212,5 @@ userSchema.index({ email: 1 });
 userSchema.index({ phone: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
-userSchema.index({ 'assignedLocations.location': 1 });
 
 module.exports = mongoose.model('User', userSchema);
