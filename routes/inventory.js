@@ -1,5 +1,6 @@
 const express = require('express');
 const Inventory = require('../models/Inventory');
+const Location = require('../models/Location');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
@@ -12,7 +13,8 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
       limit = 10,
       category,
       lowStock,
-      search
+      search,
+      locationId
     } = req.query;
     
     // Build query
@@ -21,6 +23,10 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
     // Apply filters
     if (category && category !== 'all') {
       query.category = category;
+    }
+    
+    if (locationId) {
+      query.locationId = locationId;
     }
     
     if (lowStock === 'true') {
@@ -34,12 +40,29 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
         { 'supplier.name': { $regex: search, $options: 'i' } }
       ];
     }
+
+    // Check user permissions for location access
+    if (req.user.role === 'inventory_manager' && locationId) {
+      const location = await Location.findById(locationId);
+      if (location) {
+        const hasAccess = location.assignedInventoryManagers.some(
+          manager => manager.user.toString() === req.user._id.toString()
+        );
+        if (!hasAccess) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied to this location'
+          });
+        }
+      }
+    }
     
     // Execute query with pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
     const [items, totalCount, lowStockCount, totalValue] = await Promise.all([
       Inventory.find(query)
+        .populate('locationId', 'name code type')
         .sort({ itemName: 1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -253,6 +276,121 @@ router.post('/:id/consume', authenticateToken, requirePermission('inventory.upda
     res.status(500).json({
       success: false,
       message: 'Failed to consume inventory'
+    });
+  }
+});
+
+// Transfer inventory between locations
+router.post('/:id/transfer', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const { toLocationId, quantity, notes } = req.body;
+    
+    if (!toLocationId || !quantity || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid destination location and quantity are required'
+      });
+    }
+    
+    const item = await Inventory.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inventory item not found'
+      });
+    }
+    
+    if (quantity > item.currentStock) {
+      return res.status(400).json({
+        success: false,
+        message: 'Insufficient stock available for transfer',
+        data: {
+          requested: quantity,
+          available: item.currentStock
+        }
+      });
+    }
+    
+    // Check if destination location exists
+    const toLocation = await Location.findById(toLocationId);
+    if (!toLocation) {
+      return res.status(404).json({
+        success: false,
+        message: 'Destination location not found'
+      });
+    }
+    
+    // Check if user has access to both locations
+    if (req.user.role === 'inventory_manager') {
+      const fromLocation = await Location.findById(item.locationId);
+      const hasFromAccess = fromLocation.assignedInventoryManagers.some(
+        manager => manager.user.toString() === req.user._id.toString()
+      );
+      const hasToAccess = toLocation.assignedInventoryManagers.some(
+        manager => manager.user.toString() === req.user._id.toString()
+      );
+      
+      if (!hasFromAccess || !hasToAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to one or both locations'
+        });
+      }
+    }
+    
+    // Check if item exists in destination location
+    let destinationItem = await Inventory.findOne({
+      itemCode: item.itemCode,
+      locationId: toLocationId,
+      isActive: true
+    });
+    
+    if (destinationItem) {
+      // Update existing item in destination
+      destinationItem.currentStock += quantity;
+      await destinationItem.save();
+    } else {
+      // Create new item in destination location
+      destinationItem = new Inventory({
+        ...item.toObject(),
+        _id: undefined,
+        currentStock: quantity,
+        locationId: toLocationId,
+        restockHistory: [{
+          quantity,
+          supplier: item.supplier.name,
+          restockedBy: req.user._id,
+          notes: `Transferred from ${item.locationId} - ${notes || 'No notes'}`
+        }]
+      });
+      await destinationItem.save();
+    }
+    
+    // Reduce stock from source location
+    item.currentStock -= quantity;
+    await item.save();
+    
+    res.json({
+      success: true,
+      message: 'Inventory transferred successfully',
+      data: {
+        fromItem: {
+          id: item._id,
+          newStock: item.currentStock
+        },
+        toItem: {
+          id: destinationItem._id,
+          newStock: destinationItem.currentStock
+        },
+        transferredQuantity: quantity
+      }
+    });
+    
+  } catch (error) {
+    console.error('Transfer inventory error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to transfer inventory'
     });
   }
 });
