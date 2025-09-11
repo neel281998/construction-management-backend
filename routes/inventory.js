@@ -21,8 +21,16 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
     
     // Apply storage site access control for non-admin users
     if (req.user.role !== 'admin') {
-      query.storageSite = { $in: req.user.assignedStorageSites };
+      const assignedSites = req.user.assignedStorageSites || [];
+      if (assignedSites.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'No storage sites assigned to user'
+        });
+      }
+      query.storageSite = { $in: assignedSites };
     }
+    // For admin users, no storage site restriction - they can see all items
     
     // Apply filters
     if (category && category !== 'all') {
@@ -30,6 +38,16 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
     }
     
     if (storageSiteId && storageSiteId !== 'all') {
+      // For non-admin users, ensure they can only access assigned storage sites
+      if (req.user.role !== 'admin') {
+        const assignedSites = req.user.assignedStorageSites || [];
+        if (!assignedSites.includes(storageSiteId)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied to this storage site'
+          });
+        }
+      }
       query.storageSite = storageSiteId;
     }
     
@@ -43,6 +61,11 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
         { 'supplier.name': { $regex: search, $options: 'i' } }
       ];
     }
+    
+    // Debug logging
+    console.log('Inventory query:', JSON.stringify(query, null, 2));
+    console.log('User role:', req.user.role);
+    console.log('Storage site ID:', storageSiteId);
     
     // Execute query with pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -81,6 +104,12 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
     
   } catch (error) {
     console.error('Get inventory error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      query: req.query,
+      user: req.user?.role
+    });
     res.status(500).json({
       success: false,
       message: 'Failed to fetch inventory items'
@@ -126,6 +155,7 @@ router.get('/:id', authenticateToken, requirePermission('inventory.read'), async
 // Create new inventory item
 router.post('/', authenticateToken, requirePermission('inventory.create'), async (req, res) => {
   try {
+    console.log('Create inventory request body:', req.body);
     const { storageSite } = req.body;
     
     // Check access control for non-admin users
