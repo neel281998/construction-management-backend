@@ -80,6 +80,10 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Site'
   }],
+  assignedStorageSites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'StorageSite'
+  }],
   deviceTokens: [{
     token: String,
     platform: {
@@ -167,6 +171,7 @@ userSchema.pre('save', function(next) {
       'site.create', 'site.read', 'site.update', 'site.delete',
       'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
       'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+      'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
       'attendance.read', 'attendance.approve',
       'report.generate', 'report.export'
     ],
@@ -190,10 +195,12 @@ userSchema.pre('save', function(next) {
     ],
     inventory_manager: [
       'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+      'storage_site.read', 'storage_site.update',
       'report.generate'
     ],
     inventory_assistant: [
-      'inventory.read', 'inventory.update'
+      'inventory.read', 'inventory.update',
+      'storage_site.read'
     ],
     step_manager: [
       'step.create', 'step.read', 'step.update', 'step.delete',

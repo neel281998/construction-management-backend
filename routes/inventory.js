@@ -12,15 +12,25 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
       limit = 10,
       category,
       lowStock,
-      search
+      search,
+      storageSiteId
     } = req.query;
     
     // Build query
     let query = { isActive: true };
     
+    // Apply storage site access control for non-admin users
+    if (req.user.role !== 'admin') {
+      query.storageSite = { $in: req.user.assignedStorageSites };
+    }
+    
     // Apply filters
     if (category && category !== 'all') {
       query.category = category;
+    }
+    
+    if (storageSiteId && storageSiteId !== 'all') {
+      query.storageSite = storageSiteId;
     }
     
     if (lowStock === 'true') {
@@ -30,7 +40,6 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
     if (search) {
       query.$or = [
         { itemName: { $regex: search, $options: 'i' } },
-        { itemCode: { $regex: search, $options: 'i' } },
         { 'supplier.name': { $regex: search, $options: 'i' } }
       ];
     }
@@ -40,6 +49,7 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
     
     const [items, totalCount, lowStockCount, totalValue] = await Promise.all([
       Inventory.find(query)
+        .populate('storageSite', 'name code')
         .sort({ itemName: 1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -81,12 +91,21 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
 // Get single inventory item
 router.get('/:id', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
   try {
-    const item = await Inventory.findById(req.params.id);
+    const item = await Inventory.findById(req.params.id)
+      .populate('storageSite', 'name code');
     
     if (!item) {
       return res.status(404).json({
         success: false,
         message: 'Inventory item not found'
+      });
+    }
+    
+    // Check access control for non-admin users
+    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(item.storageSite._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this inventory item'
       });
     }
     
@@ -107,8 +126,35 @@ router.get('/:id', authenticateToken, requirePermission('inventory.read'), async
 // Create new inventory item
 router.post('/', authenticateToken, requirePermission('inventory.create'), async (req, res) => {
   try {
+    const { storageSite } = req.body;
+    
+    // Check access control for non-admin users
+    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(storageSite)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this storage site'
+      });
+    }
+    
+    // Check if item already exists in this storage site
+    const existingItem = await Inventory.findOne({
+      itemName: req.body.itemName,
+      storageSite: storageSite,
+      isActive: true
+    });
+    
+    if (existingItem) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item already exists in this storage site'
+      });
+    }
+    
     const item = new Inventory(req.body);
     await item.save();
+    
+    // Populate storage site for response
+    await item.populate('storageSite', 'name code');
     
     res.status(201).json({
       success: true,
@@ -125,13 +171,6 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
         success: false,
         message: 'Validation failed',
         errors
-      });
-    }
-    
-    if (error.code === 11000) {
-      return res.status(400).json({
-        success: false,
-        message: 'Item code already exists'
       });
     }
     

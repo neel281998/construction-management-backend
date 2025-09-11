@@ -7,14 +7,6 @@ const inventorySchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'Item name cannot exceed 100 characters']
   },
-  itemCode: {
-    type: String,
-    required: [true, 'Item code is required'],
-    unique: true,
-    trim: true,
-    uppercase: true,
-    match: [/^[A-Z]{3}-\d{3}$/, 'Item code must be in format XXX-000']
-  },
   category: {
     type: String,
     required: [true, 'Category is required'],
@@ -92,11 +84,10 @@ const inventorySchema = new mongoose.Schema({
       trim: true
     }
   },
-  location: {
-    type: String,
-    required: [true, 'Storage location is required'],
-    trim: true,
-    maxlength: [100, 'Location cannot exceed 100 characters']
+  storageSite: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'StorageSite',
+    required: [true, 'Storage site is required']
   },
   lastRestocked: {
     type: Date,
@@ -108,7 +99,6 @@ const inventorySchema = new mongoose.Schema({
       required: true,
       min: [0, 'Restock quantity must be positive']
     },
-
     supplier: {
       type: String,
       required: true
@@ -119,6 +109,36 @@ const inventorySchema = new mongoose.Schema({
       required: true
     },
     restockedAt: {
+      type: Date,
+      default: Date.now
+    },
+    notes: {
+      type: String,
+      maxlength: [200, 'Notes cannot exceed 200 characters']
+    }
+  }],
+  transferHistory: [{
+    fromStorageSite: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'StorageSite',
+      required: true
+    },
+    toStorageSite: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'StorageSite',
+      required: true
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: [0, 'Transfer quantity must be positive']
+    },
+    transferredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    transferredAt: {
       type: Date,
       default: Date.now
     },
@@ -190,8 +210,34 @@ inventorySchema.methods.consumeStock = function(quantity, consumedBy, notes = ''
   return this.save();
 };
 
+// Method to transfer stock to another storage site
+inventorySchema.methods.transferToStorageSite = function(toStorageSiteId, quantity, transferredBy, notes = '') {
+  if (quantity > this.currentStock) {
+    throw new Error('Insufficient stock available for transfer');
+  }
+  
+  if (this.storageSite.toString() === toStorageSiteId.toString()) {
+    throw new Error('Cannot transfer to the same storage site');
+  }
+  
+  // Add to transfer history
+  this.transferHistory.push({
+    fromStorageSite: this.storageSite,
+    toStorageSite: toStorageSiteId,
+    quantity,
+    transferredBy,
+    notes
+  });
+  
+  // Decrease current stock
+  this.currentStock -= quantity;
+  
+  return this.save();
+};
+
 // Index for performance
-inventorySchema.index({ itemCode: 1 });
+inventorySchema.index({ itemName: 1, storageSite: 1 }); // Compound index for unique item per storage site
+inventorySchema.index({ storageSite: 1 });
 inventorySchema.index({ category: 1 });
 inventorySchema.index({ currentStock: 1, minimumStock: 1 });
 inventorySchema.index({ isActive: 1 });
