@@ -18,6 +18,7 @@ const stockRoutes = require('./routes/stocks');
 const siteInventoryRoutes = require('./routes/siteInventory');
 const storageSiteRoutes = require('./routes/storageSites');
 const inventoryTransferRoutes = require('./routes/inventoryTransfers');
+const lowStockAlertsRoutes = require('./routes/lowStockAlerts');
  
 // Load environment variables
 require('dotenv').config();
@@ -94,7 +95,8 @@ app.get('/', (req, res) => {
       stocks: '/api/stocks',
       siteInventory: '/api/site-inventory',
       storageSites: '/api/storage-sites',
-      inventoryTransfers: '/api/inventory-transfers'
+      inventoryTransfers: '/api/inventory-transfers',
+      lowStockAlerts: '/api/low-stock-alerts'
     }
   });
 });
@@ -113,6 +115,7 @@ app.use('/api/stocks', stockRoutes);
 app.use('/api/site-inventory', siteInventoryRoutes);
 app.use('/api/storage-sites', storageSiteRoutes);
 app.use('/api/inventory-transfers', inventoryTransferRoutes);
+app.use('/api/low-stock-alerts', lowStockAlertsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
