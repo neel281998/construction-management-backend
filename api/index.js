@@ -16,6 +16,9 @@ const siteTypeRoutes = require('../routes/siteTypes');
 const stepRoutes = require('../routes/steps');
 const stockRoutes = require('../routes/stocks');
 const siteInventoryRoutes = require('../routes/siteInventory');
+const storageSiteRoutes = require('../routes/storageSites');
+const inventoryTransferRoutes = require('../routes/inventoryTransfers');
+const lowStockAlertsRoutes = require('../routes/lowStockAlerts');
 
 const app = express();
 
@@ -150,7 +153,10 @@ app.get('/', (req, res) => {
       siteTypes: '/api/site-types',
       steps: '/api/steps',
       stocks: '/api/stocks',
-      siteInventory: '/api/site-inventory'
+      siteInventory: '/api/site-inventory',
+      storageSites: '/api/storage-sites',
+      inventoryTransfers: '/api/inventory-transfers',
+      lowStockAlerts: '/api/low-stock-alerts'
     }
   });
 });
@@ -167,6 +173,9 @@ app.use('/api/site-types', siteTypeRoutes);
 app.use('/api/steps', stepRoutes);
 app.use('/api/stocks', stockRoutes);
 app.use('/api/site-inventory', siteInventoryRoutes);
+app.use('/api/storage-sites', storageSiteRoutes);
+app.use('/api/inventory-transfers', inventoryTransferRoutes);
+app.use('/api/low-stock-alerts', lowStockAlertsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
