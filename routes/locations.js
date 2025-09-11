@@ -3,12 +3,12 @@ const router = express.Router();
 const Location = require('../models/Location');
 const User = require('../models/User');
 const Inventory = require('../models/Inventory');
-const auth = require('../middleware/auth');
+const { authenticateToken, requirePermission, requireAdmin } = require('../middleware/auth');
 
 // @route   GET /api/locations
 // @desc    Get all locations with optional filtering
 // @access  Private (Admin, Inventory Manager)
-router.get('/', auth, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { 
       type, 
@@ -66,7 +66,7 @@ router.get('/', auth, async (req, res) => {
 // @route   GET /api/locations/:id
 // @desc    Get single location by ID
 // @access  Private (Admin, Inventory Manager)
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const location = await Location.findById(req.params.id)
       .populate('assignedInventoryManagers.user', 'firstName lastName email phone role')
@@ -99,12 +99,8 @@ router.get('/:id', auth, async (req, res) => {
 // @route   POST /api/locations
 // @desc    Create new location
 // @access  Private (Admin only)
-router.post('/', auth, async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin role required.' });
-    }
 
     const location = new Location(req.body);
     await location.save();
@@ -128,7 +124,7 @@ router.post('/', auth, async (req, res) => {
 // @route   PUT /api/locations/:id
 // @desc    Update location
 // @access  Private (Admin, Inventory Manager with write permission)
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const location = await Location.findById(req.params.id);
     if (!location) {
@@ -170,12 +166,8 @@ router.put('/:id', auth, async (req, res) => {
 // @route   DELETE /api/locations/:id
 // @desc    Delete location (soft delete)
 // @access  Private (Admin only)
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin role required.' });
-    }
 
     const location = await Location.findById(req.params.id);
     if (!location) {
@@ -208,12 +200,8 @@ router.delete('/:id', auth, async (req, res) => {
 // @route   POST /api/locations/:id/assign-manager
 // @desc    Assign inventory manager to location
 // @access  Private (Admin only)
-router.post('/:id/assign-manager', auth, async (req, res) => {
+router.post('/:id/assign-manager', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin role required.' });
-    }
 
     const { userId, isPrimary = false, permissions = ['read', 'write'] } = req.body;
 
@@ -274,12 +262,8 @@ router.post('/:id/assign-manager', auth, async (req, res) => {
 // @route   DELETE /api/locations/:id/remove-manager/:managerId
 // @desc    Remove inventory manager from location
 // @access  Private (Admin only)
-router.delete('/:id/remove-manager/:managerId', auth, async (req, res) => {
+router.delete('/:id/remove-manager/:managerId', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Access denied. Admin role required.' });
-    }
 
     const location = await Location.findById(req.params.id);
     if (!location) {
@@ -312,7 +296,7 @@ router.delete('/:id/remove-manager/:managerId', auth, async (req, res) => {
 // @route   GET /api/locations/:id/inventory
 // @desc    Get inventory for a specific location
 // @access  Private (Admin, Inventory Manager)
-router.get('/:id/inventory', auth, async (req, res) => {
+router.get('/:id/inventory', authenticateToken, async (req, res) => {
   try {
     const location = await Location.findById(req.params.id);
     if (!location) {
@@ -377,7 +361,7 @@ router.get('/:id/inventory', auth, async (req, res) => {
 // @route   GET /api/locations/:id/stats
 // @desc    Get location statistics
 // @access  Private (Admin, Inventory Manager)
-router.get('/:id/stats', auth, async (req, res) => {
+router.get('/:id/stats', authenticateToken, async (req, res) => {
   try {
     const location = await Location.findById(req.params.id);
     if (!location) {
@@ -437,6 +421,31 @@ router.get('/:id/stats', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching location stats:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/locations/types
+// @desc    Get available location types
+// @access  Private
+router.get('/types', authenticateToken, async (req, res) => {
+  try {
+    const locationTypes = [
+      { value: 'warehouse', label: 'Warehouse', icon: '🏭' },
+      { value: 'storage_yard', label: 'Storage Yard', icon: '🏗️' },
+      { value: 'construction_site', label: 'Construction Site', icon: '🚧' },
+      { value: 'office', label: 'Office', icon: '🏢' },
+      { value: 'distribution_center', label: 'Distribution Center', icon: '📦' },
+      { value: 'temporary_storage', label: 'Temporary Storage', icon: '⏰' },
+      { value: 'other', label: 'Other', icon: '📍' },
+    ];
+
+    res.json({
+      success: true,
+      data: { locationTypes }
+    });
+  } catch (error) {
+    console.error('Error fetching location types:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });
