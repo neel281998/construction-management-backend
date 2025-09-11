@@ -152,11 +152,16 @@ storageSiteSchema.virtual('capacityPercentage').get(function() {
 
 // Virtual for active managers count
 storageSiteSchema.virtual('activeManagersCount').get(function() {
-  return this.assignedManagers.filter(assignment => assignment.isActive).length;
+  return (this.assignedManagers || []).filter(assignment => assignment.isActive).length;
 });
 
 // Method to add manager
 storageSiteSchema.methods.addManager = function(managerId, assignedBy) {
+  // Initialize assignedManagers if it doesn't exist
+  if (!this.assignedManagers) {
+    this.assignedManagers = [];
+  }
+  
   // Check if manager is already assigned
   const existingAssignment = this.assignedManagers.find(
     assignment => assignment.manager.toString() === managerId.toString() && assignment.isActive
@@ -176,6 +181,10 @@ storageSiteSchema.methods.addManager = function(managerId, assignedBy) {
 
 // Method to remove manager
 storageSiteSchema.methods.removeManager = function(managerId) {
+  if (!this.assignedManagers) {
+    throw new Error('No managers assigned to this storage site');
+  }
+  
   const assignment = this.assignedManagers.find(
     assignment => assignment.manager.toString() === managerId.toString() && assignment.isActive
   );
@@ -190,7 +199,7 @@ storageSiteSchema.methods.removeManager = function(managerId) {
 
 // Method to check if user is assigned manager
 storageSiteSchema.methods.isManagerAssigned = function(userId) {
-  return this.assignedManagers.some(
+  return (this.assignedManagers || []).some(
     assignment => assignment.manager.toString() === userId.toString() && assignment.isActive
   );
 };
