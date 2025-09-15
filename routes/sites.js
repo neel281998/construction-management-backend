@@ -1190,8 +1190,8 @@ router.get('/site-types/:siteType', authenticateToken, async (req, res) => {
   }
 });
 
-// Get step configurations for a site type
-router.get('/step-configurations/:siteType', authenticateToken, async (req, res) => {
+// Get step configurations for a site type (public endpoint - no auth required)
+router.get('/step-configurations/:siteType', async (req, res) => {
   try {
     const { siteType } = req.params;
     const { stepConfigurations } = require('../config/stepConfigurations');
