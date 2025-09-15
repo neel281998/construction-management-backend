@@ -188,9 +188,10 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
     
     console.log('Creating inventory with data:', inventoryData);
     
-    // Test if the model is working
+    // Create and save the inventory item
+    let item;
     try {
-      const item = new Inventory(inventoryData);
+      item = new Inventory(inventoryData);
       console.log('Inventory item created:', item);
       
       await item.save();
