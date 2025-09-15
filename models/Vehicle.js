@@ -172,8 +172,7 @@ vehicleSchema.virtual('fuelStatus').get(function() {
   return 'low';
 });
 
-// Index for performance
-vehicleSchema.index({ vehicleNumber: 1 });
+// Index for performance (vehicleNumber already has unique index from schema definition)
 vehicleSchema.index({ status: 1 });
 vehicleSchema.index({ type: 1 });
 vehicleSchema.index({ assignedSite: 1 });

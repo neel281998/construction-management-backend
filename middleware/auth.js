@@ -141,10 +141,49 @@ const canAccessSite = async (req, res, next) => {
   }
 };
 
+// Check if user can access storage site
+const canAccessStorageSite = async (req, res, next) => {
+  try {
+    const storageSiteId = req.params.storageSiteId || req.body.storageSiteId;
+    
+    if (!storageSiteId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Storage site ID is required'
+      });
+    }
+    
+    // Admin can access all storage sites
+    if (req.user.role === 'admin') {
+      return next();
+    }
+    
+    // Check if user is assigned to this storage site
+    const isAssigned = req.user.assignedStorageSites && req.user.assignedStorageSites.some(site => 
+      site.toString() === storageSiteId.toString()
+    );
+    
+    if (!isAssigned) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied - not assigned to this storage site'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error checking storage site access'
+    });
+  }
+};
+
 module.exports = {
   authenticateToken,
   requirePermission,
   requireRole,
   requireAdmin,
-  canAccessSite
+  canAccessSite,
+  canAccessStorageSite
 };

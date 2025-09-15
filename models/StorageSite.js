@@ -213,8 +213,7 @@ storageSiteSchema.statics.getSitesForManager = function(managerId) {
   });
 };
 
-// Index for performance
-storageSiteSchema.index({ name: 1 });
+// Index for performance (name already has unique index from schema definition)
 storageSiteSchema.index({ code: 1 });
 storageSiteSchema.index({ 'assignedManagers.manager': 1 });
 storageSiteSchema.index({ isActive: 1 });

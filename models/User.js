@@ -214,9 +214,7 @@ userSchema.pre('save', function(next) {
   next();
 });
 
-// Index for performance
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
+// Index for performance (email and phone already have unique indexes from schema definition)
 userSchema.index({ role: 1 });
 userSchema.index({ isActive: 1 });
 
