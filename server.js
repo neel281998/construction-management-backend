@@ -18,6 +18,7 @@ const stockRoutes = require('./routes/stocks');
 const siteInventoryRoutes = require('./routes/siteInventory');
 const storageSiteRoutes = require('./routes/storageSites');
 const inventoryTransferRoutes = require('./routes/inventoryTransfers');
+const inventoryDispatchRoutes = require('./routes/inventoryDispatch');
 const lowStockAlertsRoutes = require('./routes/lowStockAlerts');
  
 // Load environment variables
@@ -96,6 +97,7 @@ app.get('/', (req, res) => {
       siteInventory: '/api/site-inventory',
       storageSites: '/api/storage-sites',
       inventoryTransfers: '/api/inventory-transfers',
+      inventoryDispatch: '/api/inventory-dispatch',
       lowStockAlerts: '/api/low-stock-alerts'
     }
   });
@@ -115,6 +117,7 @@ app.use('/api/stocks', stockRoutes);
 app.use('/api/site-inventory', siteInventoryRoutes);
 app.use('/api/storage-sites', storageSiteRoutes);
 app.use('/api/inventory-transfers', inventoryTransferRoutes);
+app.use('/api/inventory-dispatch', inventoryDispatchRoutes);
 app.use('/api/low-stock-alerts', lowStockAlertsRoutes);
 
 // Health check endpoint
