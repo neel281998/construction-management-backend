@@ -42,3 +42,7 @@ async function assignAdminToStorageSites() {
 }
 
 assignAdminToStorageSites();
+
+
+
+

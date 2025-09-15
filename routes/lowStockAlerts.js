@@ -413,3 +413,7 @@ router.get('/manager/:managerId', authenticateToken, requirePermission('inventor
 });
 
 module.exports = router;
+
+
+
+

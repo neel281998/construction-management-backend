@@ -381,6 +381,44 @@ router.get('/meta/categories', authenticateToken, requirePermission('inventory.r
   }
 });
 
+// Get predefined item names
+router.get('/meta/item-names', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+  try {
+    const predefinedItemNames = [
+      'dust 1',
+      'dust 2',
+      '6mm',
+      '10mm',
+      '20mm',
+      '40mm',
+      'bitumen',
+      'ldo',
+      'cement',
+      'hysd 8mm',
+      'hysd10mm',
+      'hysd12mm',
+      'hysd 16mm',
+      'hysd 18mm',
+      'hysd 20mm',
+      'hysd 25mm',
+      'hysd 32mm',
+      'others'
+    ];
+    
+    res.json({
+      success: true,
+      data: { itemNames: predefinedItemNames }
+    });
+    
+  } catch (error) {
+    console.error('Get item names error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch item names'
+    });
+  }
+});
+
 // Update inventory stock levels (specific route before general /:id)
 router.put('/:id/stock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {

@@ -3,7 +3,7 @@ const stepConfigurations = {
   BT_ROAD: [
     {
       stepNumber: 1,
-      stepName: 'Site Preparation',
+      stepName: 'Site Clearing',
       stepType: 'custom',
       primaryStock: 'Excavation Equipment',
       secondaryStock: 'Survey Equipment',
@@ -17,7 +17,20 @@ const stepConfigurations = {
     },
     {
       stepNumber: 2,
-      stepName: 'Subgrade Preparation',
+      stepName: 'Scarifying Existing BT',
+      stepType: 'road_base',
+      primaryStock: 'Scarifying Equipment',
+      secondaryStock: 'Bitumen',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.05,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 3,
+      stepName: 'Embankment 1',
       stepType: 'road_base',
       primaryStock: 'Soil',
       secondaryStock: 'Compaction Equipment',
@@ -29,11 +42,24 @@ const stepConfigurations = {
       }
     },
     {
-      stepNumber: 3,
-      stepName: 'Base Course',
+      stepNumber: 4,
+      stepName: 'Embankment 2',
       stepType: 'road_base',
-      primaryStock: 'Aggregate',
-      secondaryStock: 'Bitumen',
+      primaryStock: 'Soil',
+      secondaryStock: 'Compaction Equipment',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.3,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 5,
+      stepName: 'Earthwork',
+      stepType: 'road_base',
+      primaryStock: 'Earth Moving Equipment',
+      secondaryStock: 'Soil',
       defaultDimensions: {
         length: 100,
         breadth: 6,
@@ -42,7 +68,46 @@ const stepConfigurations = {
       }
     },
     {
-      stepNumber: 4,
+      stepNumber: 6,
+      stepName: 'GSB 1',
+      stepType: 'road_base',
+      primaryStock: 'Granular Sub Base',
+      secondaryStock: 'Compaction Equipment',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.15,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 7,
+      stepName: 'GSB 2',
+      stepType: 'road_base',
+      primaryStock: 'Granular Sub Base',
+      secondaryStock: 'Compaction Equipment',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.15,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 8,
+      stepName: 'WMM/WBM',
+      stepType: 'road_base',
+      primaryStock: 'Wet Mix Macadam',
+      secondaryStock: 'Water',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.1,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 9,
       stepName: 'Prime Coat',
       stepType: 'road_surface',
       primaryStock: 'Bitumen',
@@ -55,7 +120,7 @@ const stepConfigurations = {
       }
     },
     {
-      stepNumber: 5,
+      stepNumber: 10,
       stepName: 'Tack Coat',
       stepType: 'road_surface',
       primaryStock: 'Bitumen',
@@ -68,15 +133,67 @@ const stepConfigurations = {
       }
     },
     {
-      stepNumber: 6,
-      stepName: 'Bituminous Surface',
+      stepNumber: 11,
+      stepName: 'DBM',
       stepType: 'road_surface',
-      primaryStock: 'Bitumen',
-      secondaryStock: 'Aggregate',
+      primaryStock: 'Dense Bituminous Macadam',
+      secondaryStock: 'Bitumen',
       defaultDimensions: {
         length: 100,
         breadth: 6,
         thickness: 0.05,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 12,
+      stepName: 'BC',
+      stepType: 'road_surface',
+      primaryStock: 'Bituminous Concrete',
+      secondaryStock: 'Bitumen',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.04,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 13,
+      stepName: 'BM',
+      stepType: 'road_surface',
+      primaryStock: 'Bituminous Macadam',
+      secondaryStock: 'Bitumen',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.03,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 14,
+      stepName: 'PMC',
+      stepType: 'road_surface',
+      primaryStock: 'Pre Mix Carpet',
+      secondaryStock: 'Bitumen',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.02,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 15,
+      stepName: 'Seal',
+      stepType: 'road_surface',
+      primaryStock: 'Seal Coat',
+      secondaryStock: 'Bitumen',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.01,
         unit: 'm'
       }
     }
@@ -85,7 +202,7 @@ const stepConfigurations = {
   CC_ROAD: [
     {
       stepNumber: 1,
-      stepName: 'Site Preparation',
+      stepName: 'Site Clearing',
       stepType: 'custom',
       primaryStock: 'Excavation Equipment',
       secondaryStock: 'Survey Equipment',
@@ -99,7 +216,20 @@ const stepConfigurations = {
     },
     {
       stepNumber: 2,
-      stepName: 'Subgrade Preparation',
+      stepName: 'Dismantling Existing CC',
+      stepType: 'custom',
+      primaryStock: 'Demolition Equipment',
+      secondaryStock: 'Waste Material',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.2,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 3,
+      stepName: 'Emb 1',
       stepType: 'road_base',
       primaryStock: 'Soil',
       secondaryStock: 'Compaction Equipment',
@@ -111,11 +241,37 @@ const stepConfigurations = {
       }
     },
     {
-      stepNumber: 3,
-      stepName: 'Base Course',
+      stepNumber: 4,
+      stepName: 'Emb 2',
       stepType: 'road_base',
-      primaryStock: 'Aggregate',
-      secondaryStock: 'Cement',
+      primaryStock: 'Soil',
+      secondaryStock: 'Compaction Equipment',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.3,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 5,
+      stepName: 'Earth Work',
+      stepType: 'road_base',
+      primaryStock: 'Earth Moving Equipment',
+      secondaryStock: 'Soil',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.2,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 6,
+      stepName: 'GSB 1',
+      stepType: 'road_base',
+      primaryStock: 'Granular Sub Base',
+      secondaryStock: 'Compaction Equipment',
       defaultDimensions: {
         length: 100,
         breadth: 6,
@@ -124,10 +280,62 @@ const stepConfigurations = {
       }
     },
     {
-      stepNumber: 4,
-      stepName: 'Reinforcement Placement',
+      stepNumber: 7,
+      stepName: 'GSB 2',
+      stepType: 'road_base',
+      primaryStock: 'Granular Sub Base',
+      secondaryStock: 'Compaction Equipment',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.15,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 8,
+      stepName: 'WMM',
+      stepType: 'road_base',
+      primaryStock: 'Wet Mix Macadam',
+      secondaryStock: 'Water',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.1,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 9,
+      stepName: 'DLC',
+      stepType: 'road_base',
+      primaryStock: 'Dry Lean Concrete',
+      secondaryStock: 'Cement',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.1,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 10,
+      stepName: 'CC',
+      stepType: 'slab',
+      primaryStock: 'Cement Concrete',
+      secondaryStock: 'Reinforcement',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.2,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 11,
+      stepName: 'Dowel Bar',
       stepType: 'custom',
-      primaryStock: 'Reinforcement',
+      primaryStock: 'Dowel Bars',
       secondaryStock: 'Concrete',
       defaultDimensions: {
         length: 100,
@@ -138,15 +346,15 @@ const stepConfigurations = {
       }
     },
     {
-      stepNumber: 5,
-      stepName: 'Concrete Surface',
-      stepType: 'slab',
-      primaryStock: 'Concrete',
-      secondaryStock: 'Reinforcement',
+      stepNumber: 12,
+      stepName: 'Interblocking',
+      stepType: 'custom',
+      primaryStock: 'Interlocking Blocks',
+      secondaryStock: 'Sand',
       defaultDimensions: {
         length: 100,
         breadth: 6,
-        thickness: 0.2,
+        thickness: 0.08,
         unit: 'm'
       }
     }
@@ -155,54 +363,145 @@ const stepConfigurations = {
   BRIDGE: [
     {
       stepNumber: 1,
-      stepName: 'Foundation',
+      stepName: 'Earthwork',
       stepType: 'foundation',
-      primaryStock: 'Concrete',
-      secondaryStock: 'Reinforcement',
+      primaryStock: 'Excavation Equipment',
+      secondaryStock: 'Soil',
       defaultDimensions: {
         length: 100,
         breadth: 6,
-        thickness: 1.0,
+        height: 2.0,
         unit: 'm'
       }
     },
     {
       stepNumber: 2,
-      stepName: 'Piers/Columns',
-      stepType: 'column',
-      primaryStock: 'Concrete',
-      secondaryStock: 'Reinforcement',
+      stepName: 'PCC',
+      stepType: 'foundation',
+      primaryStock: 'Plain Cement Concrete',
+      secondaryStock: 'Cement',
       defaultDimensions: {
-        count: 0,
-        length: 0.8,
-        breadth: 0.8,
-        height: 1,
+        length: 100,
+        breadth: 6,
+        thickness: 0.1,
         unit: 'm'
       }
     },
     {
       stepNumber: 3,
-      stepName: 'Beams',
-      stepType: 'beam',
-      primaryStock: 'Concrete',
-      secondaryStock: 'Reinforcement',
+      stepName: 'M15',
+      stepType: 'foundation',
+      primaryStock: 'M15 Concrete',
+      secondaryStock: 'Cement',
       defaultDimensions: {
-        length: 0,
-        breadth: 0.6,
-        height: 1.2,
+        length: 100,
+        breadth: 6,
+        thickness: 0.15,
         unit: 'm'
       }
     },
     {
       stepNumber: 4,
-      stepName: 'Deck Slab',
-      stepType: 'slab',
-      primaryStock: 'Concrete',
-      secondaryStock: 'Reinforcement',
+      stepName: 'M20',
+      stepType: 'foundation',
+      primaryStock: 'M20 Concrete',
+      secondaryStock: 'Cement',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.2,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 5,
+      stepName: 'M25',
+      stepType: 'foundation',
+      primaryStock: 'M25 Concrete',
+      secondaryStock: 'Cement',
       defaultDimensions: {
         length: 100,
         breadth: 6,
         thickness: 0.25,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 6,
+      stepName: 'M30',
+      stepType: 'foundation',
+      primaryStock: 'M30 Concrete',
+      secondaryStock: 'Cement',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.3,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 7,
+      stepName: 'M40',
+      stepType: 'foundation',
+      primaryStock: 'M40 Concrete',
+      secondaryStock: 'Cement',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.4,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 8,
+      stepName: 'HYSD',
+      stepType: 'custom',
+      primaryStock: 'High Yield Strength Deformed Bars',
+      secondaryStock: 'Concrete',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        height: 0.2,
+        thickness: 0,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 9,
+      stepName: 'Stone Masonry',
+      stepType: 'custom',
+      primaryStock: 'Stone Blocks',
+      secondaryStock: 'Cement Mortar',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        height: 1.5,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 10,
+      stepName: 'Coping',
+      stepType: 'custom',
+      primaryStock: 'Coping Stones',
+      secondaryStock: 'Cement Mortar',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        height: 0.3,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 11,
+      stepName: 'Plaster',
+      stepType: 'custom',
+      primaryStock: 'Cement Plaster',
+      secondaryStock: 'Sand',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.02,
         unit: 'm'
       }
     }
@@ -211,7 +510,7 @@ const stepConfigurations = {
   DRAINAGE: [
     {
       stepNumber: 1,
-      stepName: 'Excavation',
+      stepName: 'Earth Work',
       stepType: 'drainage',
       primaryStock: 'Excavation Equipment',
       secondaryStock: 'Survey Equipment',
@@ -224,40 +523,67 @@ const stepConfigurations = {
     },
     {
       stepNumber: 2,
-      stepName: 'Pipe Installation',
+      stepName: 'PCC',
       stepType: 'drainage',
-      primaryStock: 'Drainage Pipes',
-      secondaryStock: 'Pipe Fittings',
+      primaryStock: 'Plain Cement Concrete',
+      secondaryStock: 'Cement',
       defaultDimensions: {
-        length: 0,
-        breadth: 0.6,
-        height: 0.6,
+        length: 100,
+        breadth: 6,
+        thickness: 0.1,
         unit: 'm'
       }
     },
     {
       stepNumber: 3,
-      stepName: 'Backfilling',
+      stepName: 'M15',
       stepType: 'drainage',
-      primaryStock: 'Soil',
-      secondaryStock: 'Compaction Equipment',
+      primaryStock: 'M15 Concrete',
+      secondaryStock: 'Cement',
       defaultDimensions: {
         length: 100,
         breadth: 6,
-        height: 1,
+        thickness: 0.15,
         unit: 'm'
       }
     },
     {
       stepNumber: 4,
-      stepName: 'Surface Restoration',
-      stepType: 'custom',
-      primaryStock: 'Asphalt/Concrete',
-      secondaryStock: 'Compaction Equipment',
+      stepName: 'M20',
+      stepType: 'drainage',
+      primaryStock: 'M20 Concrete',
+      secondaryStock: 'Cement',
       defaultDimensions: {
         length: 100,
         breadth: 6,
-        thickness: 0.1,
+        thickness: 0.2,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 5,
+      stepName: 'M25',
+      stepType: 'drainage',
+      primaryStock: 'M25 Concrete',
+      secondaryStock: 'Cement',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        thickness: 0.25,
+        unit: 'm'
+      }
+    },
+    {
+      stepNumber: 6,
+      stepName: 'HYSD',
+      stepType: 'custom',
+      primaryStock: 'High Yield Strength Deformed Bars',
+      secondaryStock: 'Concrete',
+      defaultDimensions: {
+        length: 100,
+        breadth: 6,
+        height: 0.2,
+        thickness: 0,
         unit: 'm'
       }
     }
