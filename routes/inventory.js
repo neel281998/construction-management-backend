@@ -186,8 +186,19 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
       delete inventoryData.itemCode;
     }
     
-    const item = new Inventory(inventoryData);
-    await item.save();
+    console.log('Creating inventory with data:', inventoryData);
+    
+    // Test if the model is working
+    try {
+      const item = new Inventory(inventoryData);
+      console.log('Inventory item created:', item);
+      
+      await item.save();
+      console.log('Inventory item saved successfully');
+    } catch (modelError) {
+      console.error('Model error:', modelError);
+      throw modelError;
+    }
     
     // Populate storage site for response
     await item.populate('storageSite', 'name code');
