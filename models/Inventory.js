@@ -64,7 +64,7 @@ const inventorySchema = new mongoose.Schema({
   supplier: {
     name: {
       type: String,
-      required: [true, 'Supplier name is required'],
+      required: false, // Made optional
       trim: true,
       maxlength: [100, 'Supplier name cannot exceed 100 characters']
     },
@@ -96,17 +96,17 @@ const inventorySchema = new mongoose.Schema({
   restockHistory: [{
     quantity: {
       type: Number,
-      required: true,
+      required: false, // Made optional for new items
       min: [0, 'Restock quantity must be positive']
     },
     supplier: {
       type: String,
-      required: true
+      required: false // Made optional for new items
     },
     restockedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true
+      required: false // Made optional for new items
     },
     restockedAt: {
       type: Date,
@@ -121,22 +121,22 @@ const inventorySchema = new mongoose.Schema({
     fromStorageSite: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'StorageSite',
-      required: true
+      required: false // Made optional for new items
     },
     toStorageSite: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'StorageSite',
-      required: true
+      required: false // Made optional for new items
     },
     quantity: {
       type: Number,
-      required: true,
+      required: false, // Made optional for new items
       min: [0, 'Transfer quantity must be positive']
     },
     transferredBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true
+      required: false // Made optional for new items
     },
     transferredAt: {
       type: Date,
@@ -145,6 +145,11 @@ const inventorySchema = new mongoose.Schema({
     notes: {
       type: String,
       maxlength: [200, 'Notes cannot exceed 200 characters']
+    },
+    dispatchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'InventoryDispatch',
+      required: false
     }
   }],
   photos: [{

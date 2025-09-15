@@ -194,6 +194,12 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
     
   } catch (error) {
     console.error('Create inventory item error:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      errors: error.errors
+    });
     
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
@@ -204,9 +210,18 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
       });
     }
     
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid data format',
+        error: error.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Failed to create inventory item'
+      message: 'Failed to create inventory item',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
 });
