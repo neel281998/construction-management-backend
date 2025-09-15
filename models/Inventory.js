@@ -7,6 +7,13 @@ const inventorySchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'Item name cannot exceed 100 characters']
   },
+  itemCode: {
+    type: String,
+    unique: true,
+    sparse: true, // This allows multiple null values
+    trim: true,
+    maxlength: [50, 'Item code cannot exceed 50 characters']
+  },
   category: {
     type: String,
     required: [true, 'Category is required'],
@@ -242,6 +249,7 @@ inventorySchema.methods.transferToStorageSite = function(toStorageSiteId, quanti
 
 // Index for performance
 inventorySchema.index({ itemName: 1, storageSite: 1 }); // Compound index for unique item per storage site
+inventorySchema.index({ itemCode: 1 }, { unique: true, sparse: true }); // Sparse unique index for itemCode
 inventorySchema.index({ storageSite: 1 });
 inventorySchema.index({ category: 1 });
 inventorySchema.index({ currentStock: 1, minimumStock: 1 });

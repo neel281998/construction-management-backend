@@ -180,7 +180,13 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
       });
     }
     
-    const item = new Inventory(req.body);
+    // Clean up the request body - remove empty itemCode
+    const inventoryData = { ...req.body };
+    if (!inventoryData.itemCode || inventoryData.itemCode.trim() === '') {
+      delete inventoryData.itemCode;
+    }
+    
+    const item = new Inventory(inventoryData);
     await item.save();
     
     // Populate storage site for response
