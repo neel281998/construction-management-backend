@@ -515,4 +515,60 @@ router.delete('/:id', authenticateToken, requirePermission('storage_site.delete'
   }
 });
 
+// Get managers assigned to a storage site
+router.get('/:id/managers', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if user has access to this storage site
+    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this storage site'
+      });
+    }
+    
+    const storageSite = await StorageSite.findById(id)
+      .populate('assignedManagers.manager', 'firstName lastName email role isActive')
+      .select('assignedManagers');
+    
+    if (!storageSite) {
+      return res.status(404).json({
+        success: false,
+        message: 'Storage site not found'
+      });
+    }
+    
+    // Extract managers from assignments
+    const managers = storageSite.assignedManagers
+      .filter(assignment => assignment.manager && assignment.manager.isActive)
+      .map(assignment => ({
+        _id: assignment.manager._id,
+        firstName: assignment.manager.firstName,
+        lastName: assignment.manager.lastName,
+        email: assignment.manager.email,
+        role: assignment.manager.role,
+        assignedDate: assignment.assignedDate
+      }));
+    
+    res.json({
+      success: true,
+      data: {
+        storageSite: {
+          id: storageSite._id,
+          name: storageSite.name
+        },
+        managers
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get storage site managers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch storage site managers'
+    });
+  }
+});
+
 module.exports = router;
