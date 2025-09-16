@@ -510,6 +510,88 @@ router.put('/:id/stock', authenticateToken, requirePermission('inventory.update'
 
 
 
+// Restock inventory item
+router.post('/restock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const { itemId, quantity, supplier, notes, cost } = req.body;
+    
+    if (!itemId || !quantity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item ID and quantity are required'
+      });
+    }
+    
+    if (quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity must be greater than 0'
+      });
+    }
+    
+    const item = await Inventory.findById(itemId);
+    
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inventory item not found'
+      });
+    }
+    
+    // Check access permissions for non-admin users
+    if (req.user.role !== 'admin') {
+      const assignedSites = req.user.assignedStorageSites || [];
+      if (!assignedSites.includes(item.storageSite.toString())) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to this inventory item'
+        });
+      }
+    }
+    
+    // Update stock
+    const previousStock = item.currentStock;
+    item.currentStock += quantity;
+    item.lastRestocked = new Date();
+    
+    // Update supplier if provided
+    if (supplier) {
+      item.supplier = {
+        ...item.supplier,
+        name: supplier
+      };
+    }
+    
+    await item.save();
+    
+    // Create restock record (you might want to create a separate RestockRecord model)
+    // For now, we'll just log it
+    console.log(`Restock: ${item.itemName} - Added ${quantity} units (${previousStock} -> ${item.currentStock}) by ${req.user.email}`);
+    
+    res.json({
+      success: true,
+      message: `Successfully restocked ${quantity} ${item.unit} of ${item.itemName}`,
+      data: {
+        itemId: item._id,
+        itemName: item.itemName,
+        previousStock,
+        addedQuantity: quantity,
+        newStock: item.currentStock,
+        unit: item.unit,
+        restockedBy: req.user._id,
+        restockedAt: item.lastRestocked
+      }
+    });
+    
+  } catch (error) {
+    console.error('Restock inventory error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to restock inventory'
+    });
+  }
+});
+
 // Update inventory supplier (specific route before general /:id)
 router.put('/:id/supplier', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
