@@ -1,24 +1,31 @@
 const express = require('express');
 const Inventory = require('../models/Inventory');
+const InventoryTransfer = require('../models/InventoryTransfer');
+const InventoryTransferReceipt = require('../models/InventoryTransferReceipt');
+const Vehicle = require('../models/Vehicle');
 const StorageSite = require('../models/StorageSite');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
+const AlertService = require('../utils/alertService');
 
 const router = express.Router();
 
-// Transfer inventory between storage sites
+// Create transfer (Phase 1: Source manager initiates)
 router.post('/transfer', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
     const { 
       itemId, 
-      toStorageSiteId, 
       quantity, 
-      notes = '' 
+      toStorageSiteId, 
+      vehicleId, 
+      transferImages = [], 
+      notes = '',
+      expectedDeliveryAt 
     } = req.body;
     
-    if (!itemId || !toStorageSiteId || !quantity) {
+    if (!itemId || !quantity || !toStorageSiteId || !vehicleId) {
       return res.status(400).json({
         success: false,
-        message: 'Item ID, destination storage site ID, and quantity are required'
+        message: 'Item ID, quantity, destination storage site ID, and vehicle ID are required'
       });
     }
     
@@ -48,32 +55,6 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       });
     }
     
-    // Get the destination storage site
-    const destinationStorageSite = await StorageSite.findById(toStorageSiteId);
-    
-    if (!destinationStorageSite) {
-      return res.status(404).json({
-        success: false,
-        message: 'Destination storage site not found'
-      });
-    }
-    
-    // Check access control for destination storage site
-    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(toStorageSiteId)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied to destination storage site'
-      });
-    }
-    
-    // Check if source and destination are the same
-    if (sourceItem.storageSite._id.toString() === toStorageSiteId.toString()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot transfer to the same storage site'
-      });
-    }
-    
     // Check if sufficient stock is available
     if (quantity > sourceItem.currentStock) {
       return res.status(400).json({
@@ -86,71 +67,144 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       });
     }
     
-    // Check if destination already has this item
-    let destinationItem = await Inventory.findOne({
-      itemName: sourceItem.itemName,
-      storageSite: toStorageSiteId,
-      isActive: true
-    });
-    
-    if (destinationItem) {
-      // Update existing item at destination
-      destinationItem.currentStock += quantity;
-      
-      // Add to transfer history
-      destinationItem.transferHistory.push({
-        fromStorageSite: sourceItem.storageSite._id,
-        toStorageSite: toStorageSiteId,
-        quantity,
-        transferredBy: req.user._id,
-        notes: `Received from ${sourceItem.storageSite.name}: ${notes}`
+    // Get destination storage site
+    const destinationStorageSite = await StorageSite.findById(toStorageSiteId);
+    if (!destinationStorageSite) {
+      return res.status(404).json({
+        success: false,
+        message: 'Destination storage site not found'
       });
-      
-      await destinationItem.save();
-    } else {
-      // Create new item at destination
-      destinationItem = new Inventory({
-        itemName: sourceItem.itemName,
-        category: sourceItem.category,
-        description: sourceItem.description,
-        unit: sourceItem.unit,
-        currentStock: quantity,
-        minimumStock: sourceItem.minimumStock,
-        maximumStock: sourceItem.maximumStock,
-        supplier: sourceItem.supplier,
-        storageSite: toStorageSiteId,
-        transferHistory: [{
-          fromStorageSite: sourceItem.storageSite._id,
-          toStorageSite: toStorageSiteId,
-          quantity,
-          transferredBy: req.user._id,
-          notes: `Transferred from ${sourceItem.storageSite.name}: ${notes}`
-        }]
-      });
-      
-      await destinationItem.save();
     }
     
-    // Update source item
-    await sourceItem.transferToStorageSite(toStorageSiteId, quantity, req.user._id, notes);
+    // Get vehicle details
+    const vehicle = await Vehicle.findById(vehicleId);
+    if (!vehicle) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vehicle not found'
+      });
+    }
+    
+    // Check if vehicle is available
+    if (vehicle.status !== 'available') {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle is not available for transfer'
+      });
+    }
+    
+    // Calculate trip number for today
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    let tripNumber = 1;
+    if (vehicle.tripTracking.lastTripDate && 
+        vehicle.tripTracking.lastTripDate.toDateString() === today.toDateString()) {
+      tripNumber = vehicle.tripTracking.dailyTrips + 1;
+    }
+    
+    // Create transfer record
+    const transfer = new InventoryTransfer({
+      itemId,
+      itemName: sourceItem.itemName,
+      category: sourceItem.category,
+      unit: sourceItem.unit,
+      quantity,
+      fromStorageSite: {
+        _id: sourceItem.storageSite._id,
+        name: sourceItem.storageSite.name,
+        code: sourceItem.storageSite.code
+      },
+      toStorageSite: {
+        _id: destinationStorageSite._id,
+        name: destinationStorageSite.name,
+        code: destinationStorageSite.code
+      },
+      vehicle: {
+        _id: vehicle._id,
+        vehicleNumber: vehicle.vehicleNumber,
+        vehicleType: vehicle.type,
+        driverName: vehicle.assignedTo ? 'Assigned Driver' : undefined,
+        driverPhone: undefined
+      },
+      transferredBy: {
+        _id: req.user._id,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        email: req.user.email
+      },
+      status: 'in_transit',
+      transferImages: transferImages.map(fileId => ({
+        fileId,
+        uploadedBy: req.user._id,
+        uploadedAt: new Date()
+      })),
+      notes,
+      expectedDeliveryAt: expectedDeliveryAt ? new Date(expectedDeliveryAt) : undefined,
+      tripDate: today,
+      tripNumber
+    });
+    
+    await transfer.save();
+    
+    // Update vehicle status and trip tracking
+    vehicle.status = 'busy';
+    vehicle.tripTracking.currentTrip = transfer._id;
+    
+    if (vehicle.tripTracking.lastTripDate && 
+        vehicle.tripTracking.lastTripDate.toDateString() === today.toDateString()) {
+      vehicle.tripTracking.dailyTrips += 1;
+    } else {
+      vehicle.tripTracking.dailyTrips = 1;
+      vehicle.tripTracking.lastTripDate = today;
+    }
+    
+    vehicle.tripTracking.totalTrips += 1;
+    await vehicle.save();
+    
+    // Reduce stock from source inventory (but don't add to destination yet)
+    sourceItem.currentStock -= quantity;
+    
+    // Add to transfer history
+    sourceItem.transferHistory.push({
+      fromStorageSite: sourceItem.storageSite._id,
+      toStorageSite: destinationStorageSite._id,
+      quantity,
+      transferredBy: req.user._id,
+      notes: `Transferred to ${destinationStorageSite.name}: ${notes}`,
+      transferId: transfer._id,
+      status: 'in_transit'
+    });
+    
+    await sourceItem.save();
     
     res.json({
       success: true,
-      message: 'Inventory transferred successfully',
+      message: 'Inventory transfer initiated successfully',
       data: {
+        transfer: {
+          id: transfer._id,
+          itemName: transfer.itemName,
+          quantity: transfer.quantity,
+          fromStorageSite: transfer.fromStorageSite.name,
+          toStorageSite: transfer.toStorageSite.name,
+          vehicle: transfer.vehicle.vehicleNumber,
+          status: transfer.status,
+          tripNumber: transfer.tripNumber
+        },
         sourceItem: {
           id: sourceItem._id,
           itemName: sourceItem.itemName,
           remainingStock: sourceItem.currentStock,
           storageSite: sourceItem.storageSite.name
         },
-        destinationItem: {
-          id: destinationItem._id,
-          itemName: destinationItem.itemName,
-          newStock: destinationItem.currentStock,
-          storageSite: destinationStorageSite.name
-        },
-        transferQuantity: quantity
+        vehicle: {
+          id: vehicle._id,
+          vehicleNumber: vehicle.vehicleNumber,
+          status: vehicle.status,
+          dailyTrips: vehicle.tripTracking.dailyTrips,
+          totalTrips: vehicle.tripTracking.totalTrips
+        }
       }
     });
     
@@ -164,66 +218,367 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       });
     }
     
-    if (error.message === 'Cannot transfer to the same storage site') {
-      return res.status(400).json({
-        success: false,
-        message: error.message
-      });
-    }
-    
     res.status(500).json({
       success: false,
-      message: 'Failed to transfer inventory'
+      message: 'Failed to initiate inventory transfer'
     });
   }
 });
 
-// Get transfer history for an inventory item
-router.get('/item/:itemId/history', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+// Receive transfer (Phase 2: Destination manager confirms)
+router.post('/receive', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const { 
+      transferId, 
+      receivedQuantity, 
+      receiptImages = [], 
+      notes = '' 
+    } = req.body;
     
-    const item = await Inventory.findById(req.params.itemId)
-      .populate('storageSite', 'name code')
-      .populate('transferHistory.fromStorageSite', 'name code')
-      .populate('transferHistory.toStorageSite', 'name code')
-      .populate('transferHistory.transferredBy', 'firstName lastName email');
+    if (!transferId || !receivedQuantity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Transfer ID and received quantity are required'
+      });
+    }
     
-    if (!item) {
+    const receivedQty = parseFloat(receivedQuantity);
+    if (receivedQty <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Received quantity must be positive'
+      });
+    }
+    
+    // Get the transfer record
+    const transfer = await InventoryTransfer.findById(transferId)
+      .populate('itemId', 'itemName category unit storageSite');
+    
+    if (!transfer) {
       return res.status(404).json({
         success: false,
-        message: 'Inventory item not found'
+        message: 'Transfer record not found'
       });
     }
     
-    // Check access control
-    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(item.storageSite._id)) {
+    if (transfer.status === 'received') {
+      return res.status(400).json({
+        success: false,
+        message: 'This transfer has already been received'
+      });
+    }
+    
+    if (transfer.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot receive a cancelled transfer'
+      });
+    }
+    
+    // Check access control for destination storage site
+    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(transfer.toStorageSite._id)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied to this inventory item'
+        message: 'Access denied to destination storage site'
       });
     }
     
-    // Paginate transfer history
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const transferHistory = item.transferHistory
-      .sort((a, b) => new Date(b.transferredAt) - new Date(a.transferredAt))
-      .slice(skip, skip + parseInt(limit));
+    // Calculate quantity difference and discrepancy
+    const quantityDifference = receivedQty - transfer.quantity;
+    const discrepancyPercentage = Math.abs((quantityDifference / transfer.quantity) * 100);
+    const hasDiscrepancy = discrepancyPercentage > 5; // 5% tolerance
+    
+    // Create receipt record
+    const receipt = new InventoryTransferReceipt({
+      transferId: transfer._id,
+      receivedQuantity: receivedQty,
+      quantityDifference,
+      discrepancyPercentage,
+      receivedBy: {
+        _id: req.user._id,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        email: req.user.email
+      },
+      receiptImages: receiptImages.map(fileId => ({
+        fileId,
+        uploadedBy: req.user._id,
+        uploadedAt: new Date()
+      })),
+      notes,
+      hasDiscrepancy,
+      discrepancyReason: hasDiscrepancy ? `Quantity difference: ${quantityDifference} (${discrepancyPercentage.toFixed(2)}%)` : undefined
+    });
+    
+    await receipt.save();
+    
+    // Update transfer record
+    transfer.status = 'received';
+    transfer.receivedBy = {
+      _id: req.user._id,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      email: req.user.email
+    };
+    transfer.receivedAt = new Date();
+    await transfer.save();
+    
+    // Add inventory to destination storage site
+    const destinationStorageSite = await StorageSite.findById(transfer.toStorageSite._id);
+    
+    if (destinationStorageSite) {
+      // Check if destination already has this item
+      let destinationItem = await Inventory.findOne({
+        itemName: transfer.itemName,
+        storageSite: transfer.toStorageSite._id,
+        isActive: true
+      });
+      
+      if (destinationItem) {
+        // Update existing item at destination
+        destinationItem.currentStock += receivedQty;
+        
+        // Add to transfer history
+        destinationItem.transferHistory.push({
+          fromStorageSite: transfer.fromStorageSite._id,
+          toStorageSite: transfer.toStorageSite._id,
+          quantity: receivedQty,
+          transferredBy: req.user._id,
+          notes: `Received from transfer: ${notes}`,
+          transferId: transfer._id,
+          status: 'received'
+        });
+        
+        await destinationItem.save();
+      } else {
+        // Create new item at destination
+        destinationItem = new Inventory({
+          itemName: transfer.itemName,
+          category: transfer.category,
+          unit: transfer.unit,
+          currentStock: receivedQty,
+          minimumStock: 0,
+          maximumStock: receivedQty * 2, // Set reasonable default
+          storageSite: transfer.toStorageSite._id,
+          supplier: null,
+          lastRestocked: new Date(),
+          transferHistory: [{
+            fromStorageSite: transfer.fromStorageSite._id,
+            toStorageSite: transfer.toStorageSite._id,
+            quantity: receivedQty,
+            transferredBy: req.user._id,
+            notes: `Received from transfer: ${notes}`,
+            transferId: transfer._id,
+            status: 'received'
+          }],
+          isActive: true
+        });
+        
+        await destinationItem.save();
+      }
+    }
+    
+    // Update vehicle status back to available
+    const vehicle = await Vehicle.findById(transfer.vehicle._id);
+    if (vehicle) {
+      vehicle.status = 'available';
+      vehicle.tripTracking.currentTrip = null;
+      await vehicle.save();
+    }
+    
+    // Send alerts if there's a discrepancy
+    if (hasDiscrepancy) {
+      try {
+        await AlertService.createQuantityDiscrepancyAlert({
+          transferId: transfer._id,
+          itemName: transfer.itemName,
+          expectedQuantity: transfer.quantity,
+          receivedQuantity: receivedQty,
+          quantityDifference,
+          discrepancyPercentage,
+          fromStorageSite: transfer.fromStorageSite,
+          toStorageSite: transfer.toStorageSite,
+          transferredBy: transfer.transferredBy,
+          receivedBy: receipt.receivedBy
+        });
+      } catch (alertError) {
+        console.error('Error creating discrepancy alert:', alertError);
+        // Don't fail the receipt process if alert creation fails
+      }
+    }
+
+    // Create transfer completion alert
+    try {
+      await AlertService.createTransferCompletionAlert({
+        transferId: transfer._id,
+        itemName: transfer.itemName,
+        quantity: receivedQty,
+        fromStorageSite: transfer.fromStorageSite,
+        toStorageSite: transfer.toStorageSite,
+        transferredBy: transfer.transferredBy,
+        receivedBy: receipt.receivedBy,
+        vehicle: transfer.vehicle
+      });
+    } catch (alertError) {
+      console.error('Error creating completion alert:', alertError);
+    }
+
+    // Create vehicle trip alert
+    try {
+      await AlertService.createVehicleTripAlert({
+        vehicleId: vehicle._id,
+        vehicleNumber: vehicle.vehicleNumber,
+        dailyTrips: vehicle.tripTracking.dailyTrips,
+        totalTrips: vehicle.tripTracking.totalTrips,
+        tripDate: transfer.tripDate
+      }, {
+        transferId: transfer._id,
+        itemName: transfer.itemName,
+        quantity: receivedQty,
+        fromStorageSite: transfer.fromStorageSite,
+        toStorageSite: transfer.toStorageSite,
+        receivedBy: receipt.receivedBy
+      });
+    } catch (alertError) {
+      console.error('Error creating vehicle trip alert:', alertError);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Transfer received successfully',
+      data: {
+        transfer: {
+          id: transfer._id,
+          itemName: transfer.itemName,
+          expectedQuantity: transfer.quantity,
+          receivedQuantity: receivedQty,
+          quantityDifference,
+          discrepancyPercentage,
+          hasDiscrepancy,
+          status: transfer.status
+        },
+        receipt: {
+          id: receipt._id,
+          receivedAt: receipt.receivedAt,
+          receivedBy: receipt.receivedBy
+        },
+        vehicle: vehicle ? {
+          id: vehicle._id,
+          vehicleNumber: vehicle.vehicleNumber,
+          status: vehicle.status
+        } : null
+      }
+    });
+    
+  } catch (error) {
+    console.error('Receive transfer error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to receive transfer'
+    });
+  }
+});
+
+// Get pending transfers for a storage site
+router.get('/pending/:storageSiteId', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+  try {
+    const { storageSiteId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    
+    // Check access control
+    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(storageSiteId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this storage site'
+      });
+    }
+    
+    const transfers = await InventoryTransfer.find({
+      'toStorageSite._id': storageSiteId,
+      status: 'in_transit'
+    })
+      .sort({ transferredAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .populate('transferredBy', 'firstName lastName email')
+      .populate('fromStorageSite', 'name code');
+    
+    const totalCount = await InventoryTransfer.countDocuments({
+      'toStorageSite._id': storageSiteId,
+      status: 'in_transit'
+    });
     
     res.json({
       success: true,
       data: {
-        item: {
-          _id: item._id,
-          itemName: item.itemName,
-          currentStorageSite: item.storageSite
+        storageSite: {
+          id: storageSiteId
         },
-        transferHistory,
+        transfers,
         pagination: {
           currentPage: parseInt(page),
-          totalPages: Math.ceil(item.transferHistory.length / parseInt(limit)),
-          totalCount: item.transferHistory.length,
-          hasNext: skip + transferHistory.length < item.transferHistory.length,
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalCount,
+          hasNext: parseInt(page) * parseInt(limit) < totalCount,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get pending transfers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pending transfers'
+    });
+  }
+});
+
+// Get transfer history
+router.get('/history', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+  try {
+    const { page = 1, limit = 50, status } = req.query;
+    
+    let query = {};
+    
+    // Apply access control for non-admin users
+    if (req.user.role !== 'admin') {
+      const assignedSites = req.user.assignedStorageSites || [];
+      if (assignedSites.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'No storage sites assigned to user'
+        });
+      }
+      query.$or = [
+        { 'fromStorageSite._id': { $in: assignedSites } },
+        { 'toStorageSite._id': { $in: assignedSites } }
+      ];
+    }
+    
+    // Filter by status if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    const transfers = await InventoryTransfer.find(query)
+      .sort({ transferredAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .populate('transferredBy', 'firstName lastName email')
+      .populate('receivedBy', 'firstName lastName email');
+    
+    const totalCount = await InventoryTransfer.countDocuments(query);
+    
+    res.json({
+      success: true,
+      data: {
+        transfers,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalCount,
+          hasNext: parseInt(page) * parseInt(limit) < totalCount,
           hasPrev: parseInt(page) > 1
         }
       }
@@ -238,101 +593,65 @@ router.get('/item/:itemId/history', authenticateToken, requirePermission('invent
   }
 });
 
-// Get transfer history for a storage site
-router.get('/storage-site/:storageSiteId/history', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
+// Get vehicle trip statistics
+router.get('/vehicle-trips/:vehicleId', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
   try {
-    const { page = 1, limit = 10, type = 'all' } = req.query; // type: 'incoming', 'outgoing', 'all'
+    const { vehicleId } = req.params;
+    const { startDate, endDate } = req.query;
     
-    const storageSite = await StorageSite.findById(req.params.storageSiteId);
-    
-    if (!storageSite) {
+    const vehicle = await Vehicle.findById(vehicleId);
+    if (!vehicle) {
       return res.status(404).json({
         success: false,
-        message: 'Storage site not found'
+        message: 'Vehicle not found'
       });
     }
     
-    // Check access control
-    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(storageSite._id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied to this storage site'
-      });
-    }
-    
-    // Build query based on transfer type
-    let matchQuery = { isActive: true };
-    
-    if (type === 'incoming') {
-      matchQuery['transferHistory.toStorageSite'] = storageSite._id;
-    } else if (type === 'outgoing') {
-      matchQuery['transferHistory.fromStorageSite'] = storageSite._id;
-    } else {
-      matchQuery.$or = [
-        { 'transferHistory.toStorageSite': storageSite._id },
-        { 'transferHistory.fromStorageSite': storageSite._id }
-      ];
-    }
-    
-    const items = await Inventory.find(matchQuery)
-      .populate('storageSite', 'name code')
-      .populate('transferHistory.fromStorageSite', 'name code')
-      .populate('transferHistory.toStorageSite', 'name code')
-      .populate('transferHistory.transferredBy', 'firstName lastName email')
-      .select('itemName storageSite transferHistory');
-    
-    // Flatten and filter transfer history
-    let allTransfers = [];
-    items.forEach(item => {
-      item.transferHistory.forEach(transfer => {
-        if (type === 'all' || 
-            (type === 'incoming' && transfer.toStorageSite._id.toString() === storageSite._id.toString()) ||
-            (type === 'outgoing' && transfer.fromStorageSite._id.toString() === storageSite._id.toString())) {
-          allTransfers.push({
-            _id: transfer._id,
-            itemName: item.itemName,
-            fromStorageSite: transfer.fromStorageSite,
-            toStorageSite: transfer.toStorageSite,
-            quantity: transfer.quantity,
-            transferredBy: transfer.transferredBy,
-            transferredAt: transfer.transferredAt,
-            notes: transfer.notes
-          });
+    let dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter = {
+        tripDate: {
+          $gte: new Date(startDate),
+          $lte: new Date(endDate)
         }
-      });
-    });
+      };
+    }
     
-    // Sort by date (newest first)
-    allTransfers.sort((a, b) => new Date(b.transferredAt) - new Date(a.transferredAt));
+    const transfers = await InventoryTransfer.find({
+      'vehicle._id': vehicleId,
+      ...dateFilter
+    })
+      .sort({ tripDate: -1, tripNumber: -1 })
+      .populate('transferredBy', 'firstName lastName')
+      .populate('receivedBy', 'firstName lastName');
     
-    // Paginate
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const paginatedTransfers = allTransfers.slice(skip, skip + parseInt(limit));
+    const tripStats = {
+      vehicle: {
+        id: vehicle._id,
+        vehicleNumber: vehicle.vehicleNumber,
+        vehicleType: vehicle.type,
+        status: vehicle.status
+      },
+      tripTracking: vehicle.tripTracking,
+      transfers,
+      summary: {
+        totalTransfers: transfers.length,
+        completedTransfers: transfers.filter(t => t.status === 'received').length,
+        pendingTransfers: transfers.filter(t => t.status === 'in_transit').length,
+        totalQuantityTransferred: transfers.reduce((sum, t) => sum + t.quantity, 0)
+      }
+    };
     
     res.json({
       success: true,
-      data: {
-        storageSite: {
-          _id: storageSite._id,
-          name: storageSite.name,
-          code: storageSite.code
-        },
-        transfers: paginatedTransfers,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(allTransfers.length / parseInt(limit)),
-          totalCount: allTransfers.length,
-          hasNext: skip + paginatedTransfers.length < allTransfers.length,
-          hasPrev: parseInt(page) > 1
-        }
-      }
+      data: tripStats
     });
     
   } catch (error) {
-    console.error('Get storage site transfer history error:', error);
+    console.error('Get vehicle trips error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch storage site transfer history'
+      message: 'Failed to fetch vehicle trip statistics'
     });
   }
 });

@@ -38,7 +38,7 @@ const vehicleSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: {
-      values: ['available', 'in_use', 'maintenance', 'out_of_service'],
+      values: ['available', 'busy', 'maintenance', 'unavailable'],
       message: 'Invalid vehicle status'
     },
     default: 'available'
@@ -145,6 +145,26 @@ const vehicleSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  // Trip tracking
+  tripTracking: {
+    dailyTrips: {
+      type: Number,
+      default: 0
+    },
+    lastTripDate: {
+      type: Date,
+      default: Date.now
+    },
+    totalTrips: {
+      type: Number,
+      default: 0
+    },
+    currentTrip: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'InventoryTransfer',
+      default: null
+    }
   }
 }, {
   timestamps: true,
