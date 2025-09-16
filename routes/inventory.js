@@ -138,6 +138,14 @@ router.get('/:id', authenticateToken, requirePermission('inventory.read'), async
       });
     }
     
+    console.log('Returning inventory item:', {
+      id: item._id,
+      name: item.itemName,
+      currentStock: item.currentStock,
+      storageSite: item.storageSite,
+      createdAt: item.createdAt
+    });
+    
     res.json({
       success: true,
       data: { item }
