@@ -141,3 +141,5 @@ inventoryDispatchSchema.index({ dispatchedBy: 1 });
 inventoryDispatchSchema.index({ status: 1, dispatchedAt: -1 });
 
 module.exports = mongoose.model('InventoryDispatch', inventoryDispatchSchema);
+
+
