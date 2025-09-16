@@ -64,10 +64,10 @@ const siteSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: {
-      values: ['planning', 'active', 'on_hold', 'completed'],
+      values: ['active', 'on_hold', 'completed'],
       message: 'Invalid site status'
     },
-    default: 'planning'
+    default: 'active'
   },
   startDate: {
     type: Date,
