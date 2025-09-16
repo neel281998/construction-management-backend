@@ -131,7 +131,7 @@ router.get('/:id', authenticateToken, requirePermission('inventory.read'), async
     }
     
     // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(item.storageSite._id)) {
+    if (req.user.role !== 'admin' && item.storageSite && !req.user.assignedStorageSites.includes(item.storageSite._id)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this inventory item'
