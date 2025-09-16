@@ -102,8 +102,16 @@ const inventoryDispatchSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['dispatched', 'in_transit', 'delivered', 'received', 'cancelled'],
+    enum: ['dispatched', 'in_transit', 'delivered', 'received', 'partially_received', 'cancelled'],
     default: 'dispatched'
+  },
+  receivedQuantity: {
+    type: Number,
+    default: 0
+  },
+  remainingQuantity: {
+    type: Number,
+    default: function() { return this.quantity; }
   },
   dispatchedAt: {
     type: Date,

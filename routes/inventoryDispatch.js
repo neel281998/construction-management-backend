@@ -1,12 +1,69 @@
 const express = require('express');
 const Inventory = require('../models/Inventory');
 const InventoryDispatch = require('../models/InventoryDispatch');
+const InventoryReceipt = require('../models/InventoryReceipt');
 const StorageSite = require('../models/StorageSite');
 const Vehicle = require('../models/Vehicle');
 const Site = require('../models/Site');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Get all dispatch history (for admin or managers with access)
+router.get('/', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+  try {
+    const { page = 1, limit = 50, status } = req.query;
+    
+    let query = {};
+    
+    // Apply access control for non-admin users
+    if (req.user.role !== 'admin') {
+      const assignedSites = req.user.assignedStorageSites || [];
+      if (assignedSites.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'No storage sites assigned to user'
+        });
+      }
+      query['fromStorageSite._id'] = { $in: assignedSites };
+    }
+    
+    // Filter by status if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    const dispatches = await InventoryDispatch.find(query)
+      .sort({ dispatchedAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .populate('dispatchedBy', 'firstName lastName email')
+      .populate('receivedBy', 'firstName lastName email');
+    
+    const totalCount = await InventoryDispatch.countDocuments(query);
+    
+    res.json({
+      success: true,
+      data: {
+        dispatches,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalCount,
+          hasNext: parseInt(page) * parseInt(limit) < totalCount,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get dispatch history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dispatch history'
+    });
+  }
+});
 
 // Dispatch inventory
 router.post('/dispatch', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
@@ -195,7 +252,7 @@ router.post('/dispatch', authenticateToken, requirePermission('inventory.update'
   }
 });
 
-// Receive inventory
+// Receive inventory (supports partial receiving)
 router.post('/receive', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
     const { 
@@ -234,32 +291,57 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
     if (dispatch.status === 'received') {
       return res.status(400).json({
         success: false,
-        message: 'This dispatch has already been received'
+        message: 'This dispatch has already been fully received'
       });
     }
     
-    if (receivedQty > dispatch.quantity) {
+    if (dispatch.status === 'cancelled') {
       return res.status(400).json({
         success: false,
-        message: 'Received quantity cannot exceed dispatched quantity'
+        message: 'Cannot receive a cancelled dispatch'
       });
     }
     
+    // Check if received quantity exceeds remaining quantity
+    const remainingQty = dispatch.remainingQuantity || dispatch.quantity;
+    if (receivedQty > remainingQty) {
+      return res.status(400).json({
+        success: false,
+        message: `Received quantity (${receivedQty}) cannot exceed remaining quantity (${remainingQty})`
+      });
+    }
+    
+    // Create receipt record
+    const receipt = new InventoryReceipt({
+      dispatchId: dispatch._id,
+      receivedQuantity: receivedQty,
+      receivedBy: {
+        _id: req.user._id,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        email: req.user.email
+      },
+      deliveryImages: deliveryImages.map(fileId => ({
+        fileId,
+        uploadedBy: req.user._id,
+        uploadedAt: new Date()
+      })),
+      notes
+    });
+    
+    await receipt.save();
+    
     // Update dispatch record
-    dispatch.status = 'received';
-    dispatch.receivedBy = {
-      _id: req.user._id,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-      email: req.user.email
-    };
-    dispatch.receivedAt = new Date();
-    dispatch.deliveryImages = deliveryImages.map(fileId => ({
-      fileId,
-      uploadedBy: req.user._id,
-      uploadedAt: new Date()
-    }));
-    dispatch.notes = notes;
+    dispatch.receivedQuantity = (dispatch.receivedQuantity || 0) + receivedQty;
+    dispatch.remainingQuantity = dispatch.quantity - dispatch.receivedQuantity;
+    
+    // Update status based on remaining quantity
+    if (dispatch.remainingQuantity <= 0) {
+      dispatch.status = 'received';
+      dispatch.receivedAt = new Date();
+    } else {
+      dispatch.status = 'partially_received';
+    }
     
     await dispatch.save();
     
@@ -447,6 +529,32 @@ router.get('/pending/:destinationType/:destinationId', authenticateToken, requir
     res.status(500).json({
       success: false,
       message: 'Failed to fetch pending dispatches'
+    });
+  }
+});
+
+// Get receipt history for a dispatch
+router.get('/:dispatchId/receipts', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+  try {
+    const { dispatchId } = req.params;
+    
+    const receipts = await InventoryReceipt.find({ dispatchId })
+      .sort({ receivedAt: -1 })
+      .populate('receivedBy', 'firstName lastName email');
+    
+    res.json({
+      success: true,
+      data: {
+        dispatchId,
+        receipts
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get receipt history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch receipt history'
     });
   }
 });
