@@ -9,6 +9,52 @@ const AlertService = require('../utils/alertService');
 
 const router = express.Router();
 
+// Get specific transfer by ID (must be before other routes to avoid conflicts)
+router.get('/:transferId', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+  try {
+    const { transferId } = req.params;
+    
+    const transfer = await InventoryTransfer.findById(transferId)
+      .populate('transferredBy', 'firstName lastName email')
+      .populate('receivedBy', 'firstName lastName email');
+    
+    if (!transfer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transfer not found'
+      });
+    }
+    
+    // Check access control
+    if (req.user.role !== 'admin') {
+      const assignedSites = req.user.assignedStorageSites || [];
+      const hasAccess = assignedSites.includes(transfer.fromStorageSite._id) || 
+                       assignedSites.includes(transfer.toStorageSite._id);
+      
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to this transfer'
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        transfer
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get transfer error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transfer details'
+    });
+  }
+});
+
 // Create transfer (Phase 1: Source manager initiates)
 router.post('/transfer', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
