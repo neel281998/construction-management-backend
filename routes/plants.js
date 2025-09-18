@@ -8,8 +8,16 @@ const { authenticateToken, requirePermission } = require('../middleware/auth');
 const router = express.Router();
 
 // Get all plants
-router.get('/', authenticateToken, requirePermission('plant.read'), async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
+    // Check permissions
+    if (!req.user.permissions.includes('plant.read') && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient permissions'
+      });
+    }
+
     const {
       page = 1,
       limit = 10,

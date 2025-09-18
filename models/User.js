@@ -176,6 +176,9 @@ userSchema.pre('save', function(next) {
       'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
       'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
       'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
+      'plant.create', 'plant.read', 'plant.update', 'plant.delete',
+      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
+      'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
       'attendance.read', 'attendance.approve',
       'report.generate', 'report.export'
     ],
