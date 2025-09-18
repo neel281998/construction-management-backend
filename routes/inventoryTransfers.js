@@ -62,16 +62,25 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       itemId, 
       quantity, 
       toStorageSiteId, 
+      toPlantId,
+      toConstructionSiteId,
       vehicleId, 
       transferImages = [], 
       notes = '',
       expectedDeliveryAt 
     } = req.body;
     
-    if (!itemId || !quantity || !toStorageSiteId || !vehicleId) {
+    if (!itemId || !quantity || !vehicleId) {
       return res.status(400).json({
         success: false,
-        message: 'Item ID, quantity, destination storage site ID, and vehicle ID are required'
+        message: 'Item ID, quantity, and vehicle ID are required'
+      });
+    }
+    
+    if (!toStorageSiteId && !toPlantId && !toConstructionSiteId) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one destination (storage site, plant, or construction site) is required'
       });
     }
     
@@ -113,13 +122,41 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       });
     }
     
-    // Get destination storage site
-    const destinationStorageSite = await StorageSite.findById(toStorageSiteId);
-    if (!destinationStorageSite) {
-      return res.status(404).json({
-        success: false,
-        message: 'Destination storage site not found'
-      });
+    // Get destination (storage site, plant, or construction site)
+    let destinationStorageSite = null;
+    let destinationPlant = null;
+    let destinationConstructionSite = null;
+    
+    if (toStorageSiteId) {
+      destinationStorageSite = await StorageSite.findById(toStorageSiteId);
+      if (!destinationStorageSite) {
+        return res.status(404).json({
+          success: false,
+          message: 'Destination storage site not found'
+        });
+      }
+    }
+    
+    if (toPlantId) {
+      const Plant = require('../models/Plant');
+      destinationPlant = await Plant.findById(toPlantId);
+      if (!destinationPlant) {
+        return res.status(404).json({
+          success: false,
+          message: 'Destination plant not found'
+        });
+      }
+    }
+    
+    if (toConstructionSiteId) {
+      const Site = require('../models/Site');
+      destinationConstructionSite = await Site.findById(toConstructionSiteId);
+      if (!destinationConstructionSite) {
+        return res.status(404).json({
+          success: false,
+          message: 'Destination construction site not found'
+        });
+      }
     }
     
     // Get vehicle details
@@ -161,11 +198,23 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
         name: sourceItem.storageSite.name,
         code: sourceItem.storageSite.code
       },
-      toStorageSite: {
+      toStorageSite: destinationStorageSite ? {
         _id: destinationStorageSite._id,
         name: destinationStorageSite.name,
         code: destinationStorageSite.code
-      },
+      } : null,
+      toPlant: destinationPlant ? {
+        _id: destinationPlant._id,
+        name: destinationPlant.name,
+        code: destinationPlant.code,
+        plantType: destinationPlant.plantType
+      } : null,
+      toConstructionSite: destinationConstructionSite ? {
+        _id: destinationConstructionSite._id,
+        name: destinationConstructionSite.name,
+        code: destinationConstructionSite.code,
+        siteType: destinationConstructionSite.siteType
+      } : null,
       vehicle: {
         _id: vehicle._id,
         vehicleNumber: vehicle.vehicleNumber,

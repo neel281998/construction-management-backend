@@ -39,13 +39,39 @@ const inventoryTransferSchema = new mongoose.Schema({
     _id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'StorageSite',
-      required: true
+      required: false
     },
     name: {
       type: String,
-      required: true
+      required: false
     },
     code: String
+  },
+  toPlant: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Plant',
+      required: false
+    },
+    name: {
+      type: String,
+      required: false
+    },
+    code: String,
+    plantType: String
+  },
+  toConstructionSite: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
+      required: false
+    },
+    name: {
+      type: String,
+      required: false
+    },
+    code: String,
+    siteType: String
   },
   vehicle: {
     _id: {
@@ -133,10 +159,20 @@ const inventoryTransferSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Custom validation to ensure at least one destination is provided
+inventoryTransferSchema.pre('validate', function(next) {
+  if (!this.toStorageSite && !this.toPlant && !this.toConstructionSite) {
+    return next(new Error('At least one destination (toStorageSite, toPlant, or toConstructionSite) must be provided'));
+  }
+  next();
+});
+
 // Indexes for better query performance
 inventoryTransferSchema.index({ itemId: 1, status: 1 });
 inventoryTransferSchema.index({ fromStorageSite: 1, status: 1 });
 inventoryTransferSchema.index({ toStorageSite: 1, status: 1 });
+inventoryTransferSchema.index({ toPlant: 1, status: 1 });
+inventoryTransferSchema.index({ toConstructionSite: 1, status: 1 });
 inventoryTransferSchema.index({ vehicle: 1, tripDate: 1 });
 inventoryTransferSchema.index({ transferredBy: 1 });
 inventoryTransferSchema.index({ status: 1, transferredAt: -1 });
