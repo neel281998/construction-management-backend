@@ -38,7 +38,7 @@ const inventoryDispatchSchema = new mongoose.Schema({
   destination: {
     type: {
       type: String,
-      enum: ['construction_site', 'storage_site', 'construction_step'],
+      enum: ['construction_site', 'storage_site', 'construction_step', 'plant'],
       required: true
     },
     id: {

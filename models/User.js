@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Role is required'],
     enum: {
-      values: ['admin', 'site_manager', 'supervisor', 'worker', 'inventory_manager', 'inventory_assistant', 'step_manager'],
+      values: ['admin', 'site_manager', 'supervisor', 'worker', 'inventory_manager', 'inventory_assistant', 'step_manager', 'plant_manager'],
       message: 'Invalid role specified'
     },
     default: 'worker'
@@ -83,6 +83,10 @@ const userSchema = new mongoose.Schema({
   assignedStorageSites: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'StorageSite'
+  }],
+  assignedPlants: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Plant'
   }],
   deviceTokens: [{
     token: String,
@@ -207,6 +211,13 @@ userSchema.pre('save', function(next) {
       'site.read', // Can read sites to manage steps
       'user.read', // Can read users to assign to steps
       'report.generate' // Can generate step reports
+    ],
+    plant_manager: [
+      'plant.read', 'plant.update', // Can read and update assigned plants
+      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
+      'plant_output.create', 'plant_output.read', 'plant_output.update',
+      'inventory.read', 'inventory.update', // Can read and update inventory for dispatch/transfer
+      'report.generate' // Can generate plant reports
     ]
   };
   

@@ -150,6 +150,17 @@ router.post('/dispatch', authenticateToken, requirePermission('inventory.update'
       // For construction steps, we'll need to get the step details
       // This would require additional logic to fetch step information
       destinationName = `Construction Step ${destinationId}`;
+    } else if (destinationType === 'plant') {
+      const Plant = require('../models/Plant');
+      const plant = await Plant.findById(destinationId);
+      if (!plant) {
+        return res.status(404).json({
+          success: false,
+          message: 'Plant not found'
+        });
+      }
+      destinationName = plant.name;
+      destinationDetails = { plantType: plant.plantType };
     }
     
     // Get vehicle details
@@ -385,6 +396,59 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
             transferHistory: [{
               fromStorageSite: dispatch.fromStorageSite._id,
               toStorageSite: dispatch.destination.id,
+              quantity: receivedQty,
+              transferredBy: req.user._id,
+              notes: `Received from dispatch: ${notes}`,
+              dispatchId: dispatch._id
+            }]
+          });
+          
+          await destinationItem.save();
+        }
+      }
+    }
+    // If destination is a plant, add inventory there
+    else if (dispatch.destination.type === 'plant') {
+      const PlantInventory = require('../models/PlantInventory');
+      const destinationPlant = await Plant.findById(dispatch.destination.id);
+      
+      if (destinationPlant) {
+        // Check if destination already has this item
+        let destinationItem = await PlantInventory.findOne({
+          itemName: dispatch.itemName,
+          plant: dispatch.destination.id,
+          isActive: true
+        });
+        
+        if (destinationItem) {
+          // Update existing item at destination
+          destinationItem.currentStock += receivedQty;
+          
+          // Add to transfer history
+          destinationItem.transferHistory.push({
+            fromStorageSite: dispatch.fromStorageSite._id,
+            toPlant: dispatch.destination.id,
+            quantity: receivedQty,
+            transferredBy: req.user._id,
+            notes: `Received from dispatch: ${notes}`,
+            dispatchId: dispatch._id
+          });
+          
+          await destinationItem.save();
+        } else {
+          // Create new item at destination
+          destinationItem = new PlantInventory({
+            itemName: dispatch.itemName,
+            category: dispatch.category,
+            unit: dispatch.unit,
+            materialType: 'raw_material', // Default for received items
+            currentStock: receivedQty,
+            minimumStock: 0, // Default minimum stock
+            maximumStock: 1000, // Default maximum stock
+            plant: dispatch.destination.id,
+            transferHistory: [{
+              fromStorageSite: dispatch.fromStorageSite._id,
+              toPlant: dispatch.destination.id,
               quantity: receivedQty,
               transferredBy: req.user._id,
               notes: `Received from dispatch: ${notes}`,

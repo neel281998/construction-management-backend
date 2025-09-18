@@ -20,6 +20,9 @@ const storageSiteRoutes = require('../routes/storageSites');
 const inventoryTransferRoutes = require('../routes/inventoryTransfers');
 const inventoryDispatchRoutes = require('../routes/inventoryDispatch');
 const lowStockAlertsRoutes = require('../routes/lowStockAlerts');
+const plantRoutes = require('../routes/plants');
+const plantInventoryRoutes = require('../routes/plantInventory');
+const plantOutputRoutes = require('../routes/plantOutput');
 
 const app = express();
 
@@ -158,7 +161,10 @@ app.get('/', (req, res) => {
       storageSites: '/api/storage-sites',
       inventoryTransfers: '/api/inventory-transfers',
       inventoryDispatch: '/api/inventory-dispatch',
-      lowStockAlerts: '/api/low-stock-alerts'
+      lowStockAlerts: '/api/low-stock-alerts',
+      plants: '/api/plants',
+      plantInventory: '/api/plant-inventory',
+      plantOutput: '/api/plant-output'
     }
   });
 });
@@ -179,6 +185,9 @@ app.use('/api/storage-sites', storageSiteRoutes);
 app.use('/api/inventory-transfers', inventoryTransferRoutes);
 app.use('/api/inventory-dispatch', inventoryDispatchRoutes);
 app.use('/api/low-stock-alerts', lowStockAlertsRoutes);
+app.use('/api/plants', plantRoutes);
+app.use('/api/plant-inventory', plantInventoryRoutes);
+app.use('/api/plant-output', plantOutputRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
