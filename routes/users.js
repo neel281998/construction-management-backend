@@ -480,4 +480,50 @@ router.get('/available/inventory-managers', authenticateToken, requirePermission
   }
 });
 
+// Fix admin permissions (temporary endpoint)
+router.post('/fix-admin-permissions', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    console.log('Fixing admin permissions...');
+    
+    // Define the complete admin permissions including plant permissions
+    const adminPermissions = [
+      'user.create', 'user.read', 'user.update', 'user.delete',
+      'site.create', 'site.read', 'site.update', 'site.delete',
+      'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
+      'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+      'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
+      'plant.create', 'plant.read', 'plant.update', 'plant.delete',
+      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
+      'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+      'attendance.read', 'attendance.approve',
+      'report.generate', 'report.export'
+    ];
+
+    // Update all admin users
+    const result = await User.updateMany(
+      { role: 'admin' },
+      { $set: { permissions: adminPermissions } }
+    );
+
+    console.log(`Updated ${result.modifiedCount} admin users`);
+
+    res.json({
+      success: true,
+      message: `Updated permissions for ${result.modifiedCount} admin users`,
+      data: {
+        modifiedCount: result.modifiedCount,
+        permissions: adminPermissions
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fixing admin permissions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fix admin permissions',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

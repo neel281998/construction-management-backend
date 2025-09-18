@@ -7,8 +7,16 @@ const { authenticateToken, requirePermission } = require('../middleware/auth');
 const router = express.Router();
 
 // Get all plant output records
-router.get('/', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
+    // Check permissions - allow admin or users with plant_output.read permission
+    if (req.user.role !== 'admin' && !req.user.permissions.includes('plant_output.read')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient permissions to read plant output'
+      });
+    }
+
     const {
       page = 1,
       limit = 10,

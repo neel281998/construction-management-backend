@@ -160,8 +160,16 @@ router.get('/:id', authenticateToken, requirePermission('plant.read'), async (re
 });
 
 // Create new plant
-router.post('/', authenticateToken, requirePermission('plant.create'), async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
   try {
+    // Check permissions - allow admin or users with plant.create permission
+    if (req.user.role !== 'admin' && !req.user.permissions.includes('plant.create')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient permissions to create plants'
+      });
+    }
+
     console.log('Create plant request body:', req.body);
     
     // Check if plant with same name already exists
@@ -210,8 +218,16 @@ router.post('/', authenticateToken, requirePermission('plant.create'), async (re
 });
 
 // Update plant
-router.put('/:id', authenticateToken, requirePermission('plant.update'), async (req, res) => {
+router.put('/:id', authenticateToken, async (req, res) => {
   try {
+    // Check permissions - allow admin or users with plant.update permission
+    if (req.user.role !== 'admin' && !req.user.permissions.includes('plant.update')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient permissions to update plants'
+      });
+    }
+
     const plant = await Plant.findById(req.params.id);
     
     if (!plant) {

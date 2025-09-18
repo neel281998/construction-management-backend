@@ -6,8 +6,16 @@ const { authenticateToken, requirePermission } = require('../middleware/auth');
 const router = express.Router();
 
 // Get all plant inventory items
-router.get('/', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
+    // Check permissions - allow admin or users with plant_inventory.read permission
+    if (req.user.role !== 'admin' && !req.user.permissions.includes('plant_inventory.read')) {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient permissions to read plant inventory'
+      });
+    }
+
     const {
       page = 1,
       limit = 10,
