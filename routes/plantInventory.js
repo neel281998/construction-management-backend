@@ -5,6 +5,44 @@ const { authenticateToken, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Helper function to recalculate consumption rates
+const recalculateConsumptionRates = (item) => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+  
+  let dailyConsumption = 0;
+  let weeklyConsumption = 0;
+  let monthlyConsumption = 0;
+  
+  item.consumptionHistory.forEach(consumption => {
+    const consumptionDate = new Date(consumption.consumedAt);
+    const consumptionDay = new Date(consumptionDate.getFullYear(), consumptionDate.getMonth(), consumptionDate.getDate());
+    
+    // Daily consumption (today)
+    if (consumptionDay.getTime() === today.getTime()) {
+      dailyConsumption += consumption.quantity;
+    }
+    
+    // Weekly consumption (last 7 days)
+    if (consumptionDate >= weekAgo) {
+      weeklyConsumption += consumption.quantity;
+    }
+    
+    // Monthly consumption (last 30 days)
+    if (consumptionDate >= monthAgo) {
+      monthlyConsumption += consumption.quantity;
+    }
+  });
+  
+  return {
+    daily: dailyConsumption,
+    weekly: weeklyConsumption,
+    monthly: monthlyConsumption
+  };
+};
+
 // Get all plant inventory items
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -91,10 +129,17 @@ router.get('/', authenticateToken, async (req, res) => {
       })
     ]);
     
+    // Recalculate consumption rates for each item
+    const itemsWithUpdatedRates = items.map(item => {
+      const updatedRates = recalculateConsumptionRates(item);
+      item.consumptionRate = updatedRates;
+      return item;
+    });
+    
     res.json({
       success: true,
       data: {
-        items,
+        items: itemsWithUpdatedRates,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalCount / parseInt(limit)),
@@ -137,6 +182,9 @@ router.get('/:id', authenticateToken, requirePermission('plant_inventory.read'),
         message: 'Access denied to this plant inventory item'
       });
     }
+    
+    // Recalculate consumption rates
+    item.consumptionRate = recalculateConsumptionRates(item);
     
     res.json({
       success: true,
@@ -564,6 +612,190 @@ router.delete('/:id', authenticateToken, requirePermission('plant_inventory.dele
     res.status(500).json({
       success: false,
       message: 'Failed to delete plant inventory item'
+    });
+  }
+});
+
+// Update plant inventory item
+router.put('/:itemId', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const updateData = req.body;
+    
+    const item = await PlantInventory.findById(itemId);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plant inventory item not found'
+      });
+    }
+    
+    // Check access control for non-admin users
+    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(item.plant)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this plant inventory item'
+      });
+    }
+    
+    // Update the item
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== undefined) {
+        item[key] = updateData[key];
+      }
+    });
+    
+    await item.save();
+    
+    res.json({
+      success: true,
+      message: 'Plant inventory item updated successfully',
+      data: { item }
+    });
+    
+  } catch (error) {
+    console.error('Update plant inventory item error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update plant inventory item'
+    });
+  }
+});
+
+// Add stock to plant inventory item
+router.post('/:itemId/add-stock', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { quantity, supplier, notes } = req.body;
+    
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid quantity is required'
+      });
+    }
+    
+    const item = await PlantInventory.findById(itemId);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plant inventory item not found'
+      });
+    }
+    
+    // Check access control for non-admin users
+    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(item.plant)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this plant inventory item'
+      });
+    }
+    
+    // Add to restock history
+    item.restockHistory.push({
+      quantity,
+      supplier: supplier || 'Default Supplier',
+      restockedBy: req.user._id,
+      notes: notes || ''
+    });
+    
+    // Update current stock
+    item.currentStock += quantity;
+    item.lastRestocked = new Date();
+    
+    await item.save();
+    
+    res.json({
+      success: true,
+      message: 'Stock added successfully',
+      data: { 
+        item,
+        addedQuantity: quantity,
+        newStock: item.currentStock
+      }
+    });
+    
+  } catch (error) {
+    console.error('Add stock error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add stock'
+    });
+  }
+});
+
+// Consume stock from plant inventory item
+router.post('/:itemId/consume', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { quantity, notes, consumptionDate } = req.body;
+    
+    if (!quantity || quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid quantity is required'
+      });
+    }
+    
+    const item = await PlantInventory.findById(itemId);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plant inventory item not found'
+      });
+    }
+    
+    // Check access control for non-admin users
+    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(item.plant)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this plant inventory item'
+      });
+    }
+    
+    // Check if sufficient stock is available
+    if (quantity > item.currentStock) {
+      return res.status(400).json({
+        success: false,
+        message: 'Insufficient stock available',
+        data: {
+          requested: quantity,
+          available: item.currentStock
+        }
+      });
+    }
+    
+    // Add to consumption history
+    item.consumptionHistory.push({
+      quantity,
+      consumedBy: req.user._id,
+      consumedAt: consumptionDate ? new Date(consumptionDate) : new Date(),
+      notes: notes || ''
+    });
+    
+    // Update current stock
+    item.currentStock -= quantity;
+    
+    // Update consumption rates using helper function
+    item.consumptionRate = recalculateConsumptionRates(item);
+    
+    await item.save();
+    
+    res.json({
+      success: true,
+      message: 'Stock consumed successfully',
+      data: { 
+        item,
+        consumedQuantity: quantity,
+        remainingStock: item.currentStock
+      }
+    });
+    
+  } catch (error) {
+    console.error('Consume stock error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to consume stock'
     });
   }
 });
