@@ -141,8 +141,7 @@ router.get('/available-inventory', authenticateToken, requirePermission('site.re
     
     if (search) {
       query.$or = [
-        { itemName: { $regex: search, $options: 'i' } },
-        { itemCode: { $regex: search, $options: 'i' } }
+        { itemName: { $regex: search, $options: 'i' } }
       ];
     }
     
@@ -151,7 +150,7 @@ router.get('/available-inventory', authenticateToken, requirePermission('site.re
     }
     
     const availableItems = await Inventory.find(query)
-      .select('itemName itemCode category currentStock minimumStock unit supplier location')
+      .select('itemName category currentStock minimumStock unit supplier location')
       .sort({ itemName: 1 });
     
     res.json({

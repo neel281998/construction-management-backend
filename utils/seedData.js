@@ -351,7 +351,6 @@ const seedData = async () => {
     const inventoryItems = [
       {
         itemName: 'Portland Cement',
-        itemCode: 'CEM-001',
         category: 'Building Materials',
         description: 'High-quality portland cement for construction',
         unit: 'kg',
@@ -369,7 +368,6 @@ const seedData = async () => {
       },
       {
         itemName: 'Steel Rebar - 12mm',
-        itemCode: 'STL-012',
         category: 'Steel Products',
         description: '12mm steel reinforcement bars',
         unit: 'pieces',
@@ -387,7 +385,6 @@ const seedData = async () => {
       },
       {
         itemName: 'Safety Helmets',
-        itemCode: 'SAF-001',
         category: 'Safety Equipment',
         description: 'ANSI approved safety helmets',
         unit: 'pieces',
@@ -405,7 +402,6 @@ const seedData = async () => {
       },
       {
         itemName: 'Concrete Blocks',
-        itemCode: 'BLK-001',
         category: 'Building Materials',
         description: 'Standard concrete building blocks',
         unit: 'pieces',
@@ -423,7 +419,6 @@ const seedData = async () => {
       },
       {
         itemName: 'Paint - White Primer',
-        itemCode: 'PNT-001',
         category: 'Finishing Materials',
         description: 'High-quality white primer paint',
         unit: 'liters',

@@ -180,11 +180,8 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
       });
     }
     
-    // Clean up the request body - remove empty itemCode
+    // Use the request body directly
     const inventoryData = { ...req.body };
-    if (!inventoryData.itemCode || inventoryData.itemCode.trim() === '') {
-      delete inventoryData.itemCode;
-    }
     
     console.log('Creating plant inventory with data:', inventoryData);
     

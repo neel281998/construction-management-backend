@@ -7,13 +7,6 @@ const plantInventorySchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'Item name cannot exceed 100 characters']
   },
-  itemCode: {
-    type: String,
-    unique: true,
-    sparse: true, // This allows multiple null values
-    trim: true,
-    maxlength: [50, 'Item code cannot exceed 50 characters']
-  },
   category: {
     type: String,
     required: [true, 'Category is required'],
