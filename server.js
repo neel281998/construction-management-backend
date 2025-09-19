@@ -23,6 +23,8 @@ const lowStockAlertsRoutes = require('./routes/lowStockAlerts');
 const plantRoutes = require('./routes/plants');
 const plantInventoryRoutes = require('./routes/plantInventory');
 const plantOutputRoutes = require('./routes/plantOutput');
+const productionBatchRoutes = require('./routes/productionBatches');
+const plantOutputsRoutes = require('./routes/plantOutputs');
  
 // Load environment variables
 require('dotenv').config();
@@ -104,7 +106,9 @@ app.get('/', (req, res) => {
       lowStockAlerts: '/api/low-stock-alerts',
       plants: '/api/plants',
       plantInventory: '/api/plant-inventory',
-      plantOutput: '/api/plant-output'
+      plantOutput: '/api/plant-output',
+      productionBatches: '/api/production-batches',
+      plantOutputs: '/api/plant-outputs'
     }
   });
 });
@@ -128,6 +132,8 @@ app.use('/api/low-stock-alerts', lowStockAlertsRoutes);
 app.use('/api/plants', plantRoutes);
 app.use('/api/plant-inventory', plantInventoryRoutes);
 app.use('/api/plant-output', plantOutputRoutes);
+app.use('/api/production-batches', productionBatchRoutes);
+app.use('/api/plant-outputs', plantOutputsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
