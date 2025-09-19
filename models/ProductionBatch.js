@@ -105,7 +105,7 @@ const productionBatchSchema = new mongoose.Schema({
 
 // Indexes for better query performance
 productionBatchSchema.index({ plant: 1, status: 1 });
-productionBatchSchema.index({ batchId: 1 });
+// batchId already has unique index from unique: true
 productionBatchSchema.index({ createdBy: 1 });
 productionBatchSchema.index({ startTime: -1 });
 

@@ -117,7 +117,7 @@ const plantOutputSchema = new mongoose.Schema({
 
 // Indexes for better query performance
 plantOutputSchema.index({ plant: 1, status: 1 });
-plantOutputSchema.index({ outputId: 1 });
+// outputId already has unique index from unique: true
 plantOutputSchema.index({ batch: 1 });
 plantOutputSchema.index({ materialType: 1 });
 plantOutputSchema.index({ productionDate: -1 });
