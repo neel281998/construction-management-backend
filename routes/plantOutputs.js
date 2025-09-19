@@ -166,10 +166,11 @@ router.get('/:id', authenticateToken, requirePermission('plant_inventory.read'),
   }
 });
 
-// Create plant output from batch
+// Create plant output (with optional batch)
 router.post('/', authenticateToken, requirePermission('plant_inventory.create'), async (req, res) => {
   try {
     const {
+      plantId,
       batchId,
       materialType,
       materialName,
@@ -181,42 +182,62 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
     } = req.body;
     
     // Validate required fields
-    if (!batchId || !materialType || !materialName || !quantity || !unit) {
+    if (!plantId || !materialType || !materialName || !quantity || !unit) {
       return res.status(400).json({
         success: false,
-        message: 'Batch ID, material type, material name, quantity, and unit are required'
+        message: 'Plant ID, material type, material name, quantity, and unit are required'
       });
     }
     
-    // Check if batch exists and is completed
-    const batch = await ProductionBatch.findById(batchId)
-      .populate('plant', 'name code');
+    // Check if plant exists
+    const plant = await Plant.findById(plantId);
     
-    if (!batch) {
+    if (!plant) {
       return res.status(404).json({
         success: false,
-        message: 'Production batch not found'
-      });
-    }
-    
-    if (batch.status !== 'completed') {
-      return res.status(400).json({
-        success: false,
-        message: 'Only completed batches can create plant outputs'
+        message: 'Plant not found'
       });
     }
     
     // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(batch.plant._id)) {
+    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plantId)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant'
       });
     }
     
+    // If batchId is provided, validate the batch
+    let batch = null;
+    if (batchId) {
+      batch = await ProductionBatch.findById(batchId);
+      
+      if (!batch) {
+        return res.status(404).json({
+          success: false,
+          message: 'Production batch not found'
+        });
+      }
+      
+      if (batch.status !== 'completed') {
+        return res.status(400).json({
+          success: false,
+          message: 'Only completed batches can create plant outputs'
+        });
+      }
+      
+      // Ensure batch belongs to the same plant
+      if (batch.plant.toString() !== plantId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Production batch does not belong to the specified plant'
+        });
+      }
+    }
+    
     // Create plant output
     const output = new PlantOutput({
-      plant: batch.plant._id,
+      plant: plantId,
       batch: batchId,
       materialType,
       materialName,

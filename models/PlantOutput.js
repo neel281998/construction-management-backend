@@ -46,7 +46,7 @@ const plantOutputSchema = new mongoose.Schema({
   batch: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'ProductionBatch',
-    required: true
+    required: false
   },
   materialType: {
     type: String,
