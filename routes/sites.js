@@ -239,20 +239,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       });
     }
     
-    // Validate required managers
-    if (!siteManagerId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Site manager is required'
-      });
-    }
-    
-    if (!inventoryManagerId) {
-      return res.status(400).json({
-        success: false,
-        message: 'Inventory manager is required'
-      });
-    }
+    // Managers now optional per request. Keep if provided; allow null.
     
     // Validate project dimensions
     if (!projectDimensions || !projectDimensions.length || !projectDimensions.breadth || !projectDimensions.height) {
@@ -278,8 +265,8 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       startDate,
       expectedEndDate,
       estimatedVolumeM3,
-      siteManager: siteManagerId,
-      inventoryManager: inventoryManagerId,
+      siteManager: siteManagerId || null,
+      inventoryManager: inventoryManagerId || null,
       projectDimensions: {
         length: projectDimensions.length,
         breadth: projectDimensions.breadth,
