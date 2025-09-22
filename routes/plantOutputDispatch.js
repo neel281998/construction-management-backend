@@ -76,7 +76,8 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
       destinationId, 
       vehicleId, 
       expectedDeliveryAt, 
-      notes = '' 
+      notes = '',
+      deliveryImages = []
     } = req.body;
     
     if (!outputId || !quantity || !destinationType || !destinationId || !vehicleId) {
@@ -124,6 +125,14 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
       });
     }
     
+    // Enforce destination type to construction site or construction step only
+    if (!['construction_site', 'construction_step'].includes(destinationType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Destination must be a construction site or construction step'
+      });
+    }
+
     // Get destination details
     let destinationName = '';
     let destinationDetails = {};
@@ -138,28 +147,23 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
       }
       destinationName = site.name;
       destinationDetails = { siteType: site.siteType };
-    } else if (destinationType === 'storage_site') {
-      const storageSite = await StorageSite.findById(destinationId);
-      if (!storageSite) {
-        return res.status(404).json({
-          success: false,
-          message: 'Storage site not found'
-        });
-      }
-      destinationName = storageSite.name;
     } else if (destinationType === 'construction_step') {
-      // For construction steps, we'll need to get the step details
-      destinationName = `Construction Step ${destinationId}`;
-    } else if (destinationType === 'plant') {
-      const plant = await Plant.findById(destinationId);
-      if (!plant) {
+      const Step = require('../models/Step');
+      const step = await Step.findById(destinationId);
+      if (!step) {
         return res.status(404).json({
           success: false,
-          message: 'Plant not found'
+          message: 'Construction step not found'
         });
       }
-      destinationName = plant.name;
-      destinationDetails = { plantType: plant.plantType };
+      // fetch site for context
+      const site = await Site.findById(step.siteId);
+      destinationName = site ? `${site.name} • ${step.name || 'Step'} ${step.stepNumber || ''}`.trim() : (step.name || `Step ${destinationId}`);
+      destinationDetails = { 
+        siteId: step.siteId?.toString?.(),
+        stepName: step.name,
+        stepNumber: step.stepNumber
+      };
     }
     
     // Get vehicle details
@@ -207,6 +211,15 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
       notes
     });
     
+    // Attach delivery images if provided (as fileIds)
+    if (Array.isArray(deliveryImages) && deliveryImages.length > 0) {
+      dispatch.deliveryImages = deliveryImages.map((fileId) => ({
+        fileId,
+        uploadedBy: req.user._id,
+        uploadedAt: new Date()
+      }));
+    }
+
     await dispatch.save();
     
     // Reduce stock from source plant output
