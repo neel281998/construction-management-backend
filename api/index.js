@@ -23,6 +23,7 @@ const lowStockAlertsRoutes = require('../routes/lowStockAlerts');
 const plantRoutes = require('../routes/plants');
 const plantInventoryRoutes = require('../routes/plantInventory');
 const plantOutputRoutes = require('../routes/plantOutput');
+const plantOutputDispatchRoutes = require('../routes/plantOutputDispatch');
 const productionBatchRoutes = require('../routes/productionBatches');
 const plantOutputsRoutes = require('../routes/plantOutputs');
 
@@ -167,6 +168,7 @@ app.get('/', (req, res) => {
       plants: '/api/plants',
       plantInventory: '/api/plant-inventory',
       plantOutput: '/api/plant-output',
+      plantOutputDispatch: '/api/plant-output-dispatch',
       productionBatches: '/api/production-batches',
       plantOutputs: '/api/plant-outputs'
     }
@@ -192,6 +194,7 @@ app.use('/api/low-stock-alerts', lowStockAlertsRoutes);
 app.use('/api/plants', plantRoutes);
 app.use('/api/plant-inventory', plantInventoryRoutes);
 app.use('/api/plant-output', plantOutputRoutes);
+app.use('/api/plant-output-dispatch', plantOutputDispatchRoutes);
 app.use('/api/production-batches', productionBatchRoutes);
 app.use('/api/plant-outputs', plantOutputsRoutes);
 
