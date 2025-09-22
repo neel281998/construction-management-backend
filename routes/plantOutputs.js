@@ -244,7 +244,7 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
       currentStock: quantity,
       unit,
       qualitySpecs,
-      productionDate: batch.endTime || new Date(),
+      productionDate: batch ? batch.endTime : new Date(),
       expiryDate,
       createdBy: req.user._id,
       notes

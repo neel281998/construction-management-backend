@@ -9,6 +9,65 @@ const AlertService = require('../utils/alertService');
 
 const router = express.Router();
 
+// Get transfer history
+router.get('/history', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+  try {
+    const { page = 1, limit = 50, status } = req.query;
+    
+    let query = {};
+    
+    // Apply access control for non-admin users
+    if (req.user.role !== 'admin') {
+      const assignedSites = req.user.assignedStorageSites || [];
+      if (assignedSites.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'No storage sites assigned to user'
+        });
+      }
+      query.$or = [
+        { 'fromStorageSite._id': { $in: assignedSites } },
+        { 'toStorageSite._id': { $in: assignedSites } }
+      ];
+    }
+    
+    // Filter by status if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    const transfers = await InventoryTransfer.find(query)
+      .sort({ transferredAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .populate('transferredBy', 'firstName lastName email')
+      .populate('receivedBy', 'firstName lastName email');
+    
+    const totalCount = await InventoryTransfer.countDocuments(query);
+    
+    res.json({
+      success: true,
+      data: {
+        transfers,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalCount,
+          hasNext: parseInt(page) * parseInt(limit) < totalCount,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get transfer history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch transfer history'
+    });
+  }
+});
+
 // Get specific transfer by ID (must be before other routes to avoid conflicts)
 router.get('/:transferId', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
   try {
@@ -625,65 +684,6 @@ router.get('/pending/:storageSiteId', authenticateToken, requirePermission('inve
     res.status(500).json({
       success: false,
       message: 'Failed to fetch pending transfers'
-    });
-  }
-});
-
-// Get transfer history
-router.get('/history', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
-  try {
-    const { page = 1, limit = 50, status } = req.query;
-    
-    let query = {};
-    
-    // Apply access control for non-admin users
-    if (req.user.role !== 'admin') {
-      const assignedSites = req.user.assignedStorageSites || [];
-      if (assignedSites.length === 0) {
-        return res.status(403).json({
-          success: false,
-          message: 'No storage sites assigned to user'
-        });
-      }
-      query.$or = [
-        { 'fromStorageSite._id': { $in: assignedSites } },
-        { 'toStorageSite._id': { $in: assignedSites } }
-      ];
-    }
-    
-    // Filter by status if provided
-    if (status) {
-      query.status = status;
-    }
-    
-    const transfers = await InventoryTransfer.find(query)
-      .sort({ transferredAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .populate('transferredBy', 'firstName lastName email')
-      .populate('receivedBy', 'firstName lastName email');
-    
-    const totalCount = await InventoryTransfer.countDocuments(query);
-    
-    res.json({
-      success: true,
-      data: {
-        transfers,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalCount / parseInt(limit)),
-          totalCount,
-          hasNext: parseInt(page) * parseInt(limit) < totalCount,
-          hasPrev: parseInt(page) > 1
-        }
-      }
-    });
-    
-  } catch (error) {
-    console.error('Get transfer history error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch transfer history'
     });
   }
 });
