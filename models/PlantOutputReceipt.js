@@ -79,3 +79,4 @@ plantOutputReceiptSchema.index({ dispatchId: 1, receivedAt: -1 });
 plantOutputReceiptSchema.index({ receivedBy: 1 });
 
 module.exports = mongoose.model('PlantOutputReceipt', plantOutputReceiptSchema);
+

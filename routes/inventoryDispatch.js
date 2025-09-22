@@ -597,6 +597,65 @@ router.get('/pending/:destinationType/:destinationId', authenticateToken, requir
   }
 });
 
+// Get pending receipts (query formatted) for flexibility
+// Supports: GET /inventory-dispatch/pending-receipts?destinationType=storage_site&destinationId=...&page=1&limit=10
+router.get('/pending-receipts', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
+  try {
+    const { destinationType, destinationId, page = 1, limit = 10 } = req.query;
+
+    const query = {
+      status: { $in: ['dispatched', 'in_transit', 'delivered'] }
+    };
+
+    if (destinationType && destinationId) {
+      query['destination.type'] = destinationType;
+      query['destination.id'] = destinationId;
+    } else if (req.user.role !== 'admin') {
+      // For non-admins default to assigned storage sites if destination is not provided
+      const assignedSites = req.user.assignedStorageSites || [];
+      if (assignedSites.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'No storage sites assigned to user'
+        });
+      }
+      query['destination.type'] = 'storage_site';
+      query['destination.id'] = { $in: assignedSites.map(s => s.toString()) };
+    }
+
+    const dispatches = await InventoryDispatch.find(query)
+      .sort({ dispatchedAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .populate('dispatchedBy', 'firstName lastName email')
+      .populate('fromStorageSite', 'name code');
+
+    const totalCount = await InventoryDispatch.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        filters: { destinationType, destinationId },
+        dispatches,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalCount,
+          hasNext: parseInt(page) * parseInt(limit) < totalCount,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get pending receipts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pending receipts'
+    });
+  }
+});
+
 // Get receipt history for a dispatch
 router.get('/:dispatchId/receipts', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
   try {

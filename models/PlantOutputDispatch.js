@@ -150,3 +150,4 @@ plantOutputDispatchSchema.index({ dispatchedBy: 1 });
 plantOutputDispatchSchema.index({ status: 1, dispatchedAt: -1 });
 
 module.exports = mongoose.model('PlantOutputDispatch', plantOutputDispatchSchema);
+
