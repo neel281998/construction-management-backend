@@ -90,12 +90,12 @@ const siteSchema = new mongoose.Schema({
   siteManager: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Site manager is required']
+    default: null
   },
   inventoryManager: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: [true, 'Inventory manager is required']
+    default: null
   },
   assignedStaff: [{
     user: {
@@ -166,17 +166,17 @@ const siteSchema = new mongoose.Schema({
   projectDimensions: {
     length: {
       type: Number,
-      required: [true, 'Project length is required'],
+      default: 100,
       min: [0, 'Length cannot be negative']
     },
     breadth: {
       type: Number,
-      required: [true, 'Project breadth is required'],
+      default: 50,
       min: [0, 'Breadth cannot be negative']
     },
     height: {
       type: Number,
-      required: [true, 'Project height is required'],
+      default: 10,
       min: [0, 'Height cannot be negative']
     },
     unit: {
