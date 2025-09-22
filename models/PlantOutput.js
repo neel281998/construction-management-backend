@@ -35,7 +35,6 @@ const transferRecordSchema = new mongoose.Schema({
 const plantOutputSchema = new mongoose.Schema({
   outputId: {
     type: String,
-    required: true,
     unique: true
   },
   plant: {
