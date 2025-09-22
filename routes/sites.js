@@ -312,7 +312,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     if (stepData && stepData.length > 0) {
       // Use provided step data with dimensions
-      steps = await createStepsWithData(site._id, siteTypesArray, stepData);
+      steps = await createStepsWithData(site._id, siteTypesArray, stepData, site.estimatedVolumeM3);
     } else {
       // Use default step creation for each site type
       for (const siteType of siteTypesArray) {
@@ -389,8 +389,13 @@ async function createStepsForSiteLegacy(siteId, siteType, totalVolumeM3) {
 }
 
 // Helper function to create steps with provided data
-async function createStepsWithData(siteId, siteTypes, stepDataArray) {
+async function createStepsWithData(siteId, siteTypes, stepDataArray, siteEstimatedVolume = 0) {
   try {
+    // Calculate volume per step if not provided
+    const volumePerStep = siteEstimatedVolume > 0 && stepDataArray.length > 0 
+      ? siteEstimatedVolume / stepDataArray.length 
+      : 0;
+
     const stepPromises = stepDataArray.map(stepData => {
       const newStep = new Step({
         siteId,
@@ -399,7 +404,7 @@ async function createStepsWithData(siteId, siteTypes, stepDataArray) {
         stepType: stepData.stepType,
         primaryStock: stepData.primaryStock,
         secondaryStock: stepData.secondaryStock,
-        estimatedVolumeM3: stepData.estimatedVolumeM3 || 0,
+        estimatedVolumeM3: stepData.estimatedVolumeM3 || volumePerStep,
         estimatedDimensions: {
           length: stepData.estimatedDimensions?.length || 0,
           breadth: stepData.estimatedDimensions?.breadth || 0,
@@ -419,7 +424,7 @@ async function createStepsWithData(siteId, siteTypes, stepDataArray) {
           additionalFields: new Map()
         },
         volumeCalculations: {
-          estimatedVolume: stepData.estimatedVolumeM3 || 0,
+          estimatedVolume: stepData.estimatedVolumeM3 || volumePerStep,
           completedVolume: 0,
           volumeUnit: 'm³'
         },
