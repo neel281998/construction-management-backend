@@ -241,15 +241,26 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     // Managers now optional per request. Keep if provided; allow null.
     
-    // Validate project dimensions
-    if (!projectDimensions || !projectDimensions.length || !projectDimensions.breadth || !projectDimensions.height) {
-      return res.status(400).json({
-        success: false,
-        message: 'Project dimensions (length, breadth, height) are required'
-      });
-    }
+    // Project dimensions are optional - use defaults if not provided
+    const defaultDimensions = {
+      length: 100,
+      breadth: 50,
+      height: 10,
+      unit: 'm'
+    };
     
-    if (projectDimensions.length <= 0 || projectDimensions.breadth <= 0 || projectDimensions.height <= 0) {
+    const finalProjectDimensions = projectDimensions && 
+      projectDimensions.length && 
+      projectDimensions.breadth && 
+      projectDimensions.height ? {
+        length: projectDimensions.length,
+        breadth: projectDimensions.breadth,
+        height: projectDimensions.height,
+        unit: projectDimensions.unit || 'm'
+      } : defaultDimensions;
+    
+    // Validate dimensions if provided
+    if (projectDimensions && (projectDimensions.length <= 0 || projectDimensions.breadth <= 0 || projectDimensions.height <= 0)) {
       return res.status(400).json({
         success: false,
         message: 'Project dimensions must be greater than 0'
@@ -267,12 +278,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       estimatedVolumeM3,
       siteManager: siteManagerId || null,
       inventoryManager: inventoryManagerId || null,
-      projectDimensions: {
-        length: projectDimensions.length,
-        breadth: projectDimensions.breadth,
-        height: projectDimensions.height,
-        unit: projectDimensions.unit || 'm'
-      },
+      projectDimensions: finalProjectDimensions,
       assignedVehicles: assignedVehicleIds ? assignedVehicleIds.map(vehicleId => ({
         vehicle: vehicleId,
         assignedDate: new Date()
