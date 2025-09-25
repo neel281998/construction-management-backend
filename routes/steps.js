@@ -90,6 +90,7 @@ router.patch('/:id/progress', authenticateToken, requirePermission('site.update'
     
     // Update status based on progress
     const progressPercentage = (step.progressM3 / step.estimatedVolumeM3) * 100;
+    step.progressPercentage = Math.round(progressPercentage * 100) / 100; // Round to 2 decimal places
     if (progressPercentage >= 100) {
       step.status = 'completed';
       step.completedDate = new Date();
@@ -99,6 +100,14 @@ router.patch('/:id/progress', authenticateToken, requirePermission('site.update'
     }
     
     await step.save();
+    
+    // Recalculate site progress
+    const Site = require('../models/Site');
+    const site = await Site.findById(step.siteId);
+    if (site) {
+      await site.calculateOverallProgress();
+      await site.save();
+    }
     
     res.json({
       success: true,
@@ -136,6 +145,14 @@ router.patch('/:id/dimensions', authenticateToken, requirePermission('site.updat
     const progressData = step.calculateProgressFromDimensions();
     
     await step.save();
+    
+    // Recalculate site progress
+    const Site = require('../models/Site');
+    const site = await Site.findById(step.siteId);
+    if (site) {
+      await site.calculateOverallProgress();
+      await site.save();
+    }
     
     res.json({
       success: true,
