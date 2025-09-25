@@ -342,12 +342,26 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
     sourceItem.currentStock -= quantity;
     
     // Add to transfer history
+    let destinationName = '';
+    if (destinationStorageSite) {
+      destinationName = destinationStorageSite.name;
+    } else if (destinationPlant) {
+      destinationName = destinationPlant.name;
+    } else if (destinationConstructionSite) {
+      destinationName = destinationConstructionSite.name;
+    } else if (destinationConstructionStep) {
+      destinationName = `${destinationConstructionStep.siteId.name} - ${destinationConstructionStep.stepName}`;
+    }
+
     sourceItem.transferHistory.push({
       fromStorageSite: sourceItem.storageSite._id,
-      toStorageSite: destinationStorageSite._id,
+      toStorageSite: destinationStorageSite?._id || null,
+      toPlant: destinationPlant?._id || null,
+      toConstructionSite: destinationConstructionSite?._id || null,
+      toConstructionStep: destinationConstructionStep?._id || null,
       quantity,
       transferredBy: req.user._id,
-      notes: `Transferred to ${destinationStorageSite.name}: ${notes}`,
+      notes: `Transferred to ${destinationName}: ${notes}`,
       transferId: transfer._id,
       status: 'in_transit'
     });
@@ -363,7 +377,10 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
           itemName: transfer.itemName,
           quantity: transfer.quantity,
           fromStorageSite: transfer.fromStorageSite.name,
-          toStorageSite: transfer.toStorageSite.name,
+          toStorageSite: transfer.toStorageSite?.name || null,
+          toPlant: transfer.toPlant?.name || null,
+          toConstructionSite: transfer.toConstructionSite?.name || null,
+          toConstructionStep: transfer.toConstructionStep?.stepName || null,
           vehicle: transfer.vehicle.vehicleNumber,
           status: transfer.status,
           tripNumber: transfer.tripNumber

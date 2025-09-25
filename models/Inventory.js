@@ -128,6 +128,21 @@ const inventorySchema = new mongoose.Schema({
       ref: 'StorageSite',
       required: false // Made optional for new items
     },
+    toPlant: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Plant',
+      required: false
+    },
+    toConstructionSite: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
+      required: false
+    },
+    toConstructionStep: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Step',
+      required: false
+    },
     quantity: {
       type: Number,
       required: false, // Made optional for new items
@@ -145,6 +160,16 @@ const inventorySchema = new mongoose.Schema({
     notes: {
       type: String,
       maxlength: [200, 'Notes cannot exceed 200 characters']
+    },
+    transferId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'InventoryTransfer',
+      required: false
+    },
+    status: {
+      type: String,
+      enum: ['in_transit', 'delivered', 'cancelled'],
+      default: 'in_transit'
     },
     dispatchId: {
       type: mongoose.Schema.Types.ObjectId,
