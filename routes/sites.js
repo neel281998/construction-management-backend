@@ -818,6 +818,94 @@ router.delete('/:id', authenticateToken, requirePermission('site.delete'), async
   }
 });
 
+// Get site progress with step details
+router.get('/:id/progress', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const site = await Site.findById(req.params.id);
+    if (!site) {
+      return res.status(404).json({
+        success: false,
+        message: 'Site not found'
+      });
+    }
+    
+    // Check access permissions
+    if (req.user.role !== 'admin' && 
+        site.siteManager.toString() !== req.user._id.toString() &&
+        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+    
+    // Get all steps for this site with detailed information
+    const steps = await Step.find({ siteId: site._id, isActive: true })
+      .populate('assignedUsers.user', 'firstName lastName email role')
+      .sort({ stepNumber: 1 });
+    
+    // Calculate overall progress
+    const totalEstimatedM3 = steps.reduce((sum, step) => sum + step.estimatedVolumeM3, 0);
+    const totalProgressM3 = steps.reduce((sum, step) => sum + step.progressM3, 0);
+    const overallProgressPercentage = totalEstimatedM3 > 0 
+      ? Math.round((totalProgressM3 / totalEstimatedM3) * 100) 
+      : 0;
+    
+    // Format step data for frontend
+    const formattedSteps = steps.map(step => ({
+      _id: step._id,
+      stepNumber: step.stepNumber,
+      stepName: step.stepName,
+      stepType: step.stepType,
+      siteType: step.siteType,
+      primaryStock: step.primaryStock,
+      secondaryStock: step.secondaryStock,
+      status: step.status,
+      estimatedVolumeM3: step.estimatedVolumeM3,
+      progressM3: step.progressM3,
+      progressPercentage: step.progressPercentage || 0,
+      estimatedDimensions: step.estimatedDimensions,
+      completedDimensions: step.completedDimensions,
+      volumeCalculations: step.volumeCalculations,
+      startDate: step.startDate,
+      completedDate: step.completedDate,
+      assignedUsers: step.assignedUsers,
+      notes: step.notes
+    }));
+    
+    res.json({
+      success: true,
+      data: {
+        site: {
+          _id: site._id,
+          name: site.name,
+          status: site.status,
+          progress: site.progress,
+          estimatedVolumeM3: site.estimatedVolumeM3,
+          totalProgressM3: site.totalProgressM3
+        },
+        progress: {
+          overallProgressPercentage,
+          totalEstimatedM3,
+          totalProgressM3,
+          remainingM3: totalEstimatedM3 - totalProgressM3,
+          completedSteps: steps.filter(s => s.status === 'completed').length,
+          inProgressSteps: steps.filter(s => s.status === 'in_progress').length,
+          pendingSteps: steps.filter(s => s.status === 'pending').length
+        },
+        steps: formattedSteps
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get site progress error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch site progress'
+    });
+  }
+});
+
 // Get progress analytics for a site
 router.get('/:id/progress-analytics', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
