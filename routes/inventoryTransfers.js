@@ -790,4 +790,74 @@ router.get('/vehicle-trips/:vehicleId', authenticateToken, requirePermission('in
   }
 });
 
+// Update transfer status (cancel, dispute, etc.)
+router.patch('/:transferId/status', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const { transferId } = req.params;
+    const { status, reason } = req.body;
+    
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+    
+    const validStatuses = ['in_transit', 'received', 'disputed', 'cancelled'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid status. Must be one of: ' + validStatuses.join(', ')
+      });
+    }
+    
+    const transfer = await InventoryTransfer.findById(transferId);
+    if (!transfer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transfer not found'
+      });
+    }
+    
+    // Update transfer status
+    transfer.status = status;
+    if (reason) {
+      transfer.notes = transfer.notes ? `${transfer.notes}\nStatus update: ${reason}` : `Status update: ${reason}`;
+    }
+    
+    await transfer.save();
+    
+    // If transfer is cancelled or disputed, mark vehicle as available
+    if ((status === 'cancelled' || status === 'disputed') && transfer.vehicle) {
+      const vehicle = await Vehicle.findById(transfer.vehicle._id);
+      if (vehicle) {
+        vehicle.status = 'available';
+        vehicle.tripTracking.currentTrip = null; // Clear current trip
+        await vehicle.save();
+        console.log(`Vehicle ${vehicle.vehicleNumber} marked as available (transfer ${status})`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Transfer status updated to ${status}`,
+      data: {
+        transfer: {
+          id: transfer._id,
+          status: transfer.status,
+          itemName: transfer.itemName,
+          quantity: transfer.quantity
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update transfer status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update transfer status'
+    });
+  }
+});
+
 module.exports = router;

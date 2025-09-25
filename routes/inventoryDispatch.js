@@ -353,6 +353,16 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
     
     await transfer.save();
     
+    // Mark vehicle as available again since transfer is completed
+    const Vehicle = require('../models/Vehicle');
+    const vehicle = await Vehicle.findById(transfer.vehicle._id);
+    if (vehicle) {
+      vehicle.status = 'available';
+      vehicle.tripTracking.currentTrip = null; // Clear current trip
+      await vehicle.save();
+      console.log(`Vehicle ${vehicle.vehicleNumber} marked as available`);
+    }
+    
     // Add inventory to destination based on transfer type
     if (transfer.toPlant) {
       console.log('Processing plant transfer to:', transfer.toPlant._id);
@@ -494,7 +504,12 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
           receivedQuantity: receivedQty,
           destination: transfer.toPlant?.name || transfer.toStorageSite?.name || 'Unknown',
           status: transfer.status
-        }
+        },
+        vehicle: vehicle ? {
+          id: vehicle._id,
+          vehicleNumber: vehicle.vehicleNumber,
+          status: vehicle.status
+        } : null
       }
     });
     
@@ -599,6 +614,18 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
     }
     
     await dispatch.save();
+    
+    // Mark vehicle as available if dispatch is fully received
+    if (dispatch.status === 'received' && dispatch.vehicle) {
+      const Vehicle = require('../models/Vehicle');
+      const vehicle = await Vehicle.findById(dispatch.vehicle._id);
+      if (vehicle) {
+        vehicle.status = 'available';
+        vehicle.tripTracking.currentTrip = null; // Clear current trip
+        await vehicle.save();
+        console.log(`Vehicle ${vehicle.vehicleNumber} marked as available (dispatch completed)`);
+      }
+    }
     
     // If destination is a storage site, add inventory there
     if (dispatch.destination.type === 'storage_site') {
