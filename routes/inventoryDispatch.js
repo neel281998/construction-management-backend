@@ -263,6 +263,213 @@ router.post('/dispatch', authenticateToken, requirePermission('inventory.update'
   }
 });
 
+// Receive inventory transfer (for the new transfer system)
+router.post('/receive-transfer', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const { 
+      transferId, 
+      receivedQuantity, 
+      deliveryImages = [], 
+      notes = '' 
+    } = req.body;
+    
+    if (!transferId || !receivedQuantity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Transfer ID and received quantity are required'
+      });
+    }
+    
+    const receivedQty = parseFloat(receivedQuantity);
+    if (receivedQty <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Received quantity must be positive'
+      });
+    }
+    
+    // Get the transfer record
+    const InventoryTransfer = require('../models/InventoryTransfer');
+    const transfer = await InventoryTransfer.findById(transferId);
+    
+    if (!transfer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Transfer record not found'
+      });
+    }
+    
+    if (transfer.status === 'received') {
+      return res.status(400).json({
+        success: false,
+        message: 'This transfer has already been received'
+      });
+    }
+    
+    if (transfer.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot receive a cancelled transfer'
+      });
+    }
+    
+    // Check if received quantity exceeds transfer quantity
+    if (receivedQty > transfer.quantity) {
+      return res.status(400).json({
+        success: false,
+        message: `Received quantity (${receivedQty}) cannot exceed transfer quantity (${transfer.quantity})`
+      });
+    }
+    
+    // Update transfer record
+    transfer.status = 'received';
+    transfer.receivedBy = {
+      _id: req.user._id,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      email: req.user.email
+    };
+    transfer.receivedAt = new Date();
+    transfer.receivedQuantity = receivedQty;
+    transfer.receiptImages = deliveryImages.map(fileId => ({
+      fileId,
+      uploadedBy: req.user._id,
+      uploadedAt: new Date()
+    }));
+    transfer.receiptNotes = notes;
+    
+    await transfer.save();
+    
+    // Add inventory to destination based on transfer type
+    if (transfer.toPlant) {
+      const PlantInventory = require('../models/PlantInventory');
+      const destinationPlant = await require('../models/Plant').findById(transfer.toPlant._id);
+      
+      if (destinationPlant) {
+        // Check if destination already has this item
+        let destinationItem = await PlantInventory.findOne({
+          itemName: transfer.itemName,
+          plant: transfer.toPlant._id,
+          isActive: true
+        });
+        
+        if (destinationItem) {
+          // Update existing item at destination
+          destinationItem.currentStock += receivedQty;
+          
+          // Add to transfer history
+          destinationItem.transferHistory.push({
+            fromStorageSite: transfer.fromStorageSite._id,
+            toPlant: transfer.toPlant._id,
+            quantity: receivedQty,
+            transferredBy: req.user._id,
+            notes: `Received from transfer: ${notes}`,
+            transferId: transfer._id,
+            status: 'delivered'
+          });
+          
+          await destinationItem.save();
+        } else {
+          // Create new item at destination
+          destinationItem = new PlantInventory({
+            itemName: transfer.itemName,
+            category: transfer.category,
+            unit: transfer.unit,
+            materialType: 'raw_material', // Default for received items
+            currentStock: receivedQty,
+            minimumStock: 0, // Default minimum stock
+            maximumStock: 1000, // Default maximum stock
+            plant: transfer.toPlant._id,
+            transferHistory: [{
+              fromStorageSite: transfer.fromStorageSite._id,
+              toPlant: transfer.toPlant._id,
+              quantity: receivedQty,
+              transferredBy: req.user._id,
+              notes: `Received from transfer: ${notes}`,
+              transferId: transfer._id,
+              status: 'delivered'
+            }]
+          });
+          
+          await destinationItem.save();
+        }
+      }
+    } else if (transfer.toStorageSite) {
+      const destinationStorageSite = await require('../models/StorageSite').findById(transfer.toStorageSite._id);
+      
+      if (destinationStorageSite) {
+        // Check if destination already has this item
+        let destinationItem = await require('../models/Inventory').findOne({
+          itemName: transfer.itemName,
+          storageSite: transfer.toStorageSite._id,
+          isActive: true
+        });
+        
+        if (destinationItem) {
+          // Update existing item at destination
+          destinationItem.currentStock += receivedQty;
+          
+          // Add to transfer history
+          destinationItem.transferHistory.push({
+            fromStorageSite: transfer.fromStorageSite._id,
+            toStorageSite: transfer.toStorageSite._id,
+            quantity: receivedQty,
+            transferredBy: req.user._id,
+            notes: `Received from transfer: ${notes}`,
+            transferId: transfer._id,
+            status: 'delivered'
+          });
+          
+          await destinationItem.save();
+        } else {
+          // Create new item at destination
+          destinationItem = new (require('../models/Inventory'))({
+            itemName: transfer.itemName,
+            category: transfer.category,
+            unit: transfer.unit,
+            currentStock: receivedQty,
+            minimumStock: 0, // Default minimum stock
+            maximumStock: 1000, // Default maximum stock
+            storageSite: transfer.toStorageSite._id,
+            transferHistory: [{
+              fromStorageSite: transfer.fromStorageSite._id,
+              toStorageSite: transfer.toStorageSite._id,
+              quantity: receivedQty,
+              transferredBy: req.user._id,
+              notes: `Received from transfer: ${notes}`,
+              transferId: transfer._id,
+              status: 'delivered'
+            }]
+          });
+          
+          await destinationItem.save();
+        }
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: 'Inventory transfer received successfully',
+      data: {
+        transfer: {
+          id: transfer._id,
+          itemName: transfer.itemName,
+          receivedQuantity: receivedQty,
+          destination: transfer.toPlant?.name || transfer.toStorageSite?.name || 'Unknown',
+          status: transfer.status
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Receive transfer error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to receive inventory transfer'
+    });
+  }
+});
+
 // Receive inventory (supports partial receiving)
 router.post('/receive', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
@@ -603,13 +810,31 @@ router.get('/pending-receipts', authenticateToken, requirePermission('inventory.
   try {
     const { destinationType, destinationId, page = 1, limit = 10 } = req.query;
 
-    const query = {
+    // Query for InventoryDispatch records
+    const dispatchQuery = {
       status: { $in: ['dispatched', 'in_transit', 'delivered'] }
     };
 
+    // Query for InventoryTransfer records
+    const transferQuery = {
+      status: { $in: ['in_transit'] }
+    };
+
     if (destinationType && destinationId) {
-      query['destination.type'] = destinationType;
-      query['destination.id'] = destinationId;
+      // For InventoryDispatch
+      dispatchQuery['destination.type'] = destinationType;
+      dispatchQuery['destination.id'] = destinationId;
+      
+      // For InventoryTransfer - check different destination fields based on type
+      if (destinationType === 'storage_site') {
+        transferQuery['toStorageSite._id'] = destinationId;
+      } else if (destinationType === 'plant') {
+        transferQuery['toPlant._id'] = destinationId;
+      } else if (destinationType === 'construction_site') {
+        transferQuery['toConstructionSite._id'] = destinationId;
+      } else if (destinationType === 'construction_step') {
+        transferQuery['toConstructionStep._id'] = destinationId;
+      }
     } else if (req.user.role !== 'admin') {
       // For non-admins default to assigned storage sites if destination is not provided
       const assignedSites = req.user.assignedStorageSites || [];
@@ -619,24 +844,83 @@ router.get('/pending-receipts', authenticateToken, requirePermission('inventory.
           message: 'No storage sites assigned to user'
         });
       }
-      query['destination.type'] = 'storage_site';
-      query['destination.id'] = { $in: assignedSites.map(s => s.toString()) };
+      dispatchQuery['destination.type'] = 'storage_site';
+      dispatchQuery['destination.id'] = { $in: assignedSites.map(s => s.toString()) };
+      transferQuery['toStorageSite._id'] = { $in: assignedSites.map(s => s.toString()) };
     }
 
-    const dispatches = await InventoryDispatch.find(query)
-      .sort({ dispatchedAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .populate('dispatchedBy', 'firstName lastName email')
-      .populate('fromStorageSite', 'name code');
+    // Fetch both types of records
+    const [dispatches, transfers] = await Promise.all([
+      InventoryDispatch.find(dispatchQuery)
+        .sort({ dispatchedAt: -1 })
+        .populate('dispatchedBy', 'firstName lastName email')
+        .populate('fromStorageSite', 'name code'),
+      
+      require('../models/InventoryTransfer').find(transferQuery)
+        .sort({ createdAt: -1 })
+        .populate('transferredBy', 'firstName lastName email')
+        .populate('fromStorageSite._id', 'name code')
+    ]);
 
-    const totalCount = await InventoryDispatch.countDocuments(query);
+    // Combine and format the results
+    const allPendingReceipts = [
+      ...dispatches.map(dispatch => ({
+        _id: dispatch._id,
+        type: 'dispatch',
+        itemName: dispatch.itemName,
+        quantity: dispatch.quantity,
+        unit: dispatch.unit,
+        fromStorageSite: dispatch.fromStorageSite,
+        destination: dispatch.destination,
+        status: dispatch.status,
+        dispatchedAt: dispatch.dispatchedAt,
+        dispatchedBy: dispatch.dispatchedBy,
+        vehicle: dispatch.vehicle,
+        notes: dispatch.notes
+      })),
+      ...transfers.map(transfer => ({
+        _id: transfer._id,
+        type: 'transfer',
+        itemName: transfer.itemName,
+        quantity: transfer.quantity,
+        unit: transfer.unit,
+        fromStorageSite: transfer.fromStorageSite,
+        destination: {
+          type: transfer.toStorageSite ? 'storage_site' : 
+                 transfer.toPlant ? 'plant' :
+                 transfer.toConstructionSite ? 'construction_site' :
+                 transfer.toConstructionStep ? 'construction_step' : 'unknown',
+          id: transfer.toStorageSite?._id || 
+              transfer.toPlant?._id || 
+              transfer.toConstructionSite?._id || 
+              transfer.toConstructionStep?._id,
+          name: transfer.toStorageSite?.name || 
+                transfer.toPlant?.name || 
+                transfer.toConstructionSite?.name || 
+                `${transfer.toConstructionStep?.siteName} - ${transfer.toConstructionStep?.stepName}`
+        },
+        status: transfer.status,
+        dispatchedAt: transfer.createdAt, // Use createdAt as dispatchedAt for transfers
+        dispatchedBy: transfer.transferredBy,
+        vehicle: transfer.vehicle,
+        notes: transfer.notes
+      }))
+    ];
+
+    // Sort combined results by date (newest first)
+    allPendingReceipts.sort((a, b) => new Date(b.dispatchedAt) - new Date(a.dispatchedAt));
+
+    // Apply pagination
+    const totalCount = allPendingReceipts.length;
+    const startIndex = (parseInt(page) - 1) * parseInt(limit);
+    const endIndex = startIndex + parseInt(limit);
+    const paginatedResults = allPendingReceipts.slice(startIndex, endIndex);
 
     res.json({
       success: true,
       data: {
         filters: { destinationType, destinationId },
-        dispatches,
+        dispatches: paginatedResults, // Keep the same field name for compatibility
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalCount / parseInt(limit)),
