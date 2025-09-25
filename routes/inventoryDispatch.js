@@ -386,9 +386,27 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
           await destinationItem.save();
         } else {
           // Create new item at destination
-          destinationItem = new PlantInventory({
+          // Map category to valid PlantInventory category
+          const mapCategory = (category) => {
+            const categoryMap = {
+              'Building Materials': 'Other',
+              'Steel Products': 'Steel Reinforcement',
+              'Safety Equipment': 'Safety Equipment',
+              'Tools & Equipment': 'Tools & Equipment',
+              'Electrical Supplies': 'Other',
+              'Plumbing Supplies': 'Other',
+              'Finishing Materials': 'Other',
+              'Hardware': 'Other',
+              'Other': 'Other'
+            };
+            const mappedCategory = categoryMap[category] || 'Other';
+            console.log(`Mapping category: ${category} -> ${mappedCategory}`);
+            return mappedCategory;
+          };
+
+          const plantInventoryData = {
             itemName: transfer.itemName,
-            category: transfer.category,
+            category: mapCategory(transfer.category),
             unit: transfer.unit,
             materialType: 'raw_material', // Default for received items
             currentStock: receivedQty,
@@ -404,9 +422,13 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
               transferId: transfer._id,
               status: 'delivered'
             }]
-          });
+          };
+
+          console.log('Creating PlantInventory with data:', plantInventoryData);
+          destinationItem = new PlantInventory(plantInventoryData);
           
           await destinationItem.save();
+          console.log('PlantInventory created successfully');
         }
       }
     } else if (transfer.toStorageSite) {
