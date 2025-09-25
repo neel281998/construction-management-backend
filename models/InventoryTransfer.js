@@ -73,6 +73,31 @@ const inventoryTransferSchema = new mongoose.Schema({
     code: String,
     siteType: String
   },
+  toConstructionStep: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Step',
+      required: false
+    },
+    stepName: {
+      type: String,
+      required: false
+    },
+    stepNumber: {
+      type: Number,
+      required: false
+    },
+    siteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site',
+      required: false
+    },
+    siteName: {
+      type: String,
+      required: false
+    },
+    siteType: String
+  },
   vehicle: {
     _id: {
       type: mongoose.Schema.Types.ObjectId,

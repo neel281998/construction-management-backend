@@ -123,6 +123,7 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       toStorageSiteId, 
       toPlantId,
       toConstructionSiteId,
+      toConstructionStepId,
       vehicleId, 
       transferImages = [], 
       notes = '',
@@ -136,10 +137,10 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       });
     }
     
-    if (!toStorageSiteId && !toPlantId && !toConstructionSiteId) {
+    if (!toStorageSiteId && !toPlantId && !toConstructionSiteId && !toConstructionStepId) {
       return res.status(400).json({
         success: false,
-        message: 'At least one destination (storage site, plant, or construction site) is required'
+        message: 'At least one destination (storage site, plant, construction site, or construction step) is required'
       });
     }
     
@@ -181,10 +182,11 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       });
     }
     
-    // Get destination (storage site, plant, or construction site)
+    // Get destination (storage site, plant, construction site, or construction step)
     let destinationStorageSite = null;
     let destinationPlant = null;
     let destinationConstructionSite = null;
+    let destinationConstructionStep = null;
     
     if (toStorageSiteId) {
       destinationStorageSite = await StorageSite.findById(toStorageSiteId);
@@ -214,6 +216,18 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
         return res.status(404).json({
           success: false,
           message: 'Destination construction site not found'
+        });
+      }
+    }
+    
+    if (toConstructionStepId) {
+      const Step = require('../models/Step');
+      destinationConstructionStep = await Step.findById(toConstructionStepId)
+        .populate('siteId', 'name siteType');
+      if (!destinationConstructionStep) {
+        return res.status(404).json({
+          success: false,
+          message: 'Destination construction step not found'
         });
       }
     }
@@ -273,6 +287,14 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
         name: destinationConstructionSite.name,
         code: destinationConstructionSite.code,
         siteType: destinationConstructionSite.siteType
+      } : null,
+      toConstructionStep: destinationConstructionStep ? {
+        _id: destinationConstructionStep._id,
+        stepName: destinationConstructionStep.stepName,
+        stepNumber: destinationConstructionStep.stepNumber,
+        siteId: destinationConstructionStep.siteId._id,
+        siteName: destinationConstructionStep.siteId.name,
+        siteType: destinationConstructionStep.siteId.siteType
       } : null,
       vehicle: {
         _id: vehicle._id,
