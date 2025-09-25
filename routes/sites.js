@@ -319,6 +319,37 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       if (totalStepVolume > 0) {
         site.estimatedVolumeM3 = totalStepVolume;
         await site.save();
+      } else {
+        // If no volumes provided, distribute the site's estimated volume among steps
+        console.log('No step volumes provided, distributing site volume among steps');
+        const totalSiteVolume = site.estimatedVolumeM3 || 0;
+        const stepCount = stepData.length;
+        
+        if (totalSiteVolume > 0 && stepCount > 0) {
+          const volumePerStep = totalSiteVolume / stepCount;
+          
+          // Update each step with distributed volume
+          for (let i = 0; i < steps.length; i++) {
+            steps[i].estimatedVolumeM3 = volumePerStep;
+            steps[i].volumeCalculations.estimatedVolume = volumePerStep;
+            await steps[i].save();
+          }
+          
+          console.log(`Distributed ${totalSiteVolume} m³ among ${stepCount} steps (${volumePerStep} m³ per step)`);
+        } else {
+          // Fallback to default volumes from site type configs
+          console.log('No site volume available, using default volumes from site type configs');
+          const { siteTypeConfigs } = require('../config/stepConfigurations');
+          const defaultVolume = siteTypesArray.reduce((sum, siteType) => {
+            const config = siteTypeConfigs[siteType];
+            return sum + (config?.totalVolumeM3 || 0);
+          }, 0);
+          
+          if (defaultVolume > 0) {
+            site.estimatedVolumeM3 = defaultVolume;
+            await site.save();
+          }
+        }
       }
     } else {
       // Use default step creation for each site type
@@ -330,6 +361,24 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     // Create inventory items for each step
     await createSiteInventory(site._id, steps, req.user._id);
+    
+    // Calculate initial progress based on created steps
+    const progressResult = await site.calculateOverallProgress();
+    await site.save();
+    
+    console.log('Site created with progress:', {
+      siteId: site._id,
+      siteName: site.name,
+      totalSteps: steps.length,
+      estimatedVolumeM3: site.estimatedVolumeM3,
+      progress: progressResult.progress,
+      totalProgressM3: progressResult.totalProgressM3,
+      stepVolumes: steps.map(step => ({
+        stepName: step.stepName,
+        estimatedVolume: step.estimatedVolumeM3,
+        siteType: step.siteType
+      }))
+    });
     
     // Populate the response
     await site.populate([
@@ -398,6 +447,17 @@ async function createStepsForSiteLegacy(siteId, siteType, totalVolumeM3) {
 // Helper function to create steps with provided data
 async function createStepsWithData(siteId, siteTypes, stepDataArray, siteEstimatedVolume = 0) {
   try {
+    console.log('Creating steps with data:', {
+      siteId,
+      siteTypes,
+      stepDataCount: stepDataArray.length,
+      stepData: stepDataArray.map(step => ({
+        stepName: step.stepName,
+        estimatedVolumeM3: step.estimatedVolumeM3,
+        siteType: step.siteType
+      }))
+    });
+    
     const stepPromises = stepDataArray.map(stepData => {
       const newStep = new Step({
         siteId,
@@ -1117,6 +1177,25 @@ router.post('/:id/recalculate-progress', authenticateToken, requirePermission('s
       });
     }
     
+    // Get all steps for this site
+    const Step = require('../models/Step');
+    const steps = await Step.find({ siteId: site._id, isActive: true });
+    
+    // Check if steps have 0 volume and fix them
+    const stepsWithZeroVolume = steps.filter(step => step.estimatedVolumeM3 === 0);
+    if (stepsWithZeroVolume.length > 0 && site.estimatedVolumeM3 > 0) {
+      console.log(`Fixing ${stepsWithZeroVolume.length} steps with zero volume for site ${site.name}`);
+      const volumePerStep = site.estimatedVolumeM3 / steps.length;
+      
+      for (const step of stepsWithZeroVolume) {
+        step.estimatedVolumeM3 = volumePerStep;
+        step.volumeCalculations.estimatedVolume = volumePerStep;
+        await step.save();
+      }
+      
+      console.log(`Distributed ${site.estimatedVolumeM3} m³ among ${steps.length} steps (${volumePerStep} m³ per step)`);
+    }
+    
     // Calculate overall progress
     const progressResult = await site.calculateOverallProgress();
     await site.save();
@@ -1131,7 +1210,8 @@ router.post('/:id/recalculate-progress', authenticateToken, requirePermission('s
           progress: progressResult.progress,
           totalProgressM3: progressResult.totalProgressM3,
           estimatedVolumeM3: progressResult.estimatedVolumeM3
-        }
+        },
+        fixedSteps: stepsWithZeroVolume.length
       }
     });
     
