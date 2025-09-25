@@ -320,36 +320,12 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
         site.estimatedVolumeM3 = totalStepVolume;
         await site.save();
       } else {
-        // If no volumes provided, distribute the site's estimated volume among steps
-        console.log('No step volumes provided, distributing site volume among steps');
-        const totalSiteVolume = site.estimatedVolumeM3 || 0;
-        const stepCount = stepData.length;
+        // If no volumes provided, don't distribute - let StepWiseForm calculate them
+        console.log('No step volumes provided - steps will need to be configured with dimensions');
+        console.log('Steps created with 0 volume - they need to be updated with actual dimensions');
         
-        if (totalSiteVolume > 0 && stepCount > 0) {
-          const volumePerStep = totalSiteVolume / stepCount;
-          
-          // Update each step with distributed volume
-          for (let i = 0; i < steps.length; i++) {
-            steps[i].estimatedVolumeM3 = volumePerStep;
-            steps[i].volumeCalculations.estimatedVolume = volumePerStep;
-            await steps[i].save();
-          }
-          
-          console.log(`Distributed ${totalSiteVolume} m³ among ${stepCount} steps (${volumePerStep} m³ per step)`);
-        } else {
-          // Fallback to default volumes from site type configs
-          console.log('No site volume available, using default volumes from site type configs');
-          const { siteTypeConfigs } = require('../config/stepConfigurations');
-          const defaultVolume = siteTypesArray.reduce((sum, siteType) => {
-            const config = siteTypeConfigs[siteType];
-            return sum + (config?.totalVolumeM3 || 0);
-          }, 0);
-          
-          if (defaultVolume > 0) {
-            site.estimatedVolumeM3 = defaultVolume;
-            await site.save();
-          }
-        }
+        // Don't distribute volumes - let the StepWiseForm calculate them from LBH
+        // This ensures users enter actual dimensions instead of getting arbitrary distributed volumes
       }
     } else {
       // Use default step creation for each site type
