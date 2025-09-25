@@ -266,6 +266,7 @@ router.post('/dispatch', authenticateToken, requirePermission('inventory.update'
 // Receive inventory transfer (for the new transfer system)
 router.post('/receive-transfer', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
+    console.log('Receive transfer request body:', req.body);
     const { 
       transferId, 
       receivedQuantity, 
@@ -291,6 +292,14 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
     // Get the transfer record
     const InventoryTransfer = require('../models/InventoryTransfer');
     const transfer = await InventoryTransfer.findById(transferId);
+    
+    console.log('Found transfer:', transfer ? {
+      id: transfer._id,
+      itemName: transfer.itemName,
+      status: transfer.status,
+      toPlant: transfer.toPlant,
+      toStorageSite: transfer.toStorageSite
+    } : 'Not found');
     
     if (!transfer) {
       return res.status(404).json({
@@ -330,20 +339,26 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
       email: req.user.email
     };
     transfer.receivedAt = new Date();
-    transfer.receivedQuantity = receivedQty;
-    transfer.receiptImages = deliveryImages.map(fileId => ({
-      fileId,
-      uploadedBy: req.user._id,
-      uploadedAt: new Date()
-    }));
-    transfer.receiptNotes = notes;
+    // Note: receivedQuantity field doesn't exist in model, we'll track this in notes
+    transfer.notes = transfer.notes ? `${transfer.notes}\nReceived: ${receivedQty} ${transfer.unit} on ${new Date().toISOString()}` : `Received: ${receivedQty} ${transfer.unit} on ${new Date().toISOString()}`;
+    // Note: receiptImages field doesn't exist, we'll add to transferImages if needed
+    if (deliveryImages && deliveryImages.length > 0) {
+      transfer.transferImages = transfer.transferImages || [];
+      transfer.transferImages.push(...deliveryImages.map(fileId => ({
+        fileId,
+        uploadedBy: req.user._id,
+        uploadedAt: new Date()
+      })));
+    }
     
     await transfer.save();
     
     // Add inventory to destination based on transfer type
     if (transfer.toPlant) {
+      console.log('Processing plant transfer to:', transfer.toPlant._id);
       const PlantInventory = require('../models/PlantInventory');
       const destinationPlant = await require('../models/Plant').findById(transfer.toPlant._id);
+      console.log('Found destination plant:', destinationPlant ? destinationPlant.name : 'Not found');
       
       if (destinationPlant) {
         // Check if destination already has this item
