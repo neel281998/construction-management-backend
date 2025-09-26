@@ -1,184 +1,202 @@
 const mongoose = require('mongoose');
 
 const alertSchema = new mongoose.Schema({
-  type: {
-    type: String,
-    required: true,
-    enum: [
-      'low_stock',
-      'quantity_discrepancy',
-      'transfer_completed',
-      'vehicle_trip_completed',
-      'maintenance_due',
-      'system_error',
-      'user_action_required'
-    ]
-  },
-  category: {
-    type: String,
-    required: true,
-    enum: ['inventory', 'vehicle', 'system', 'user', 'maintenance']
-  },
-  severity: {
-    type: String,
-    required: true,
-    enum: ['low', 'medium', 'high', 'critical']
-  },
   title: {
     type: String,
     required: true,
-    maxlength: [200, 'Title cannot exceed 200 characters']
+    trim: true
   },
   message: {
     type: String,
     required: true,
-    maxlength: [1000, 'Message cannot exceed 1000 characters']
+    trim: true
   },
-  details: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
-  status: {
+  type: {
     type: String,
-    enum: ['active', 'acknowledged', 'resolved', 'dismissed'],
-    default: 'active'
+    required: true,
+    enum: ['info', 'warning', 'error', 'success', 'maintenance', 'low_stock', 'vehicle_issue', 'site_issue', 'system']
   },
   priority: {
     type: String,
-    enum: ['low', 'medium', 'high', 'urgent'],
+    required: true,
+    enum: ['low', 'medium', 'high', 'critical'],
     default: 'medium'
   },
-  assignedTo: [{
+  category: {
+    type: String,
+    required: true,
+    enum: ['site', 'vehicle', 'inventory', 'staff', 'system', 'maintenance', 'dispatch', 'receive']
+  },
+  status: {
+    type: String,
+    required: true,
+    enum: ['active', 'acknowledged', 'resolved', 'dismissed'],
+    default: 'active'
+  },
+  targetUsers: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
+  targetRoles: [{
+    type: String,
+    enum: ['admin', 'site_manager', 'inventory_manager', 'vehicle_manager', 'staff']
+  }],
+  relatedEntity: {
+    entityType: {
+      type: String,
+      enum: ['site', 'vehicle', 'inventory', 'user', 'dispatch', 'receipt']
+    },
+    entityId: {
+      type: mongoose.Schema.Types.ObjectId
+    }
   },
-  acknowledgedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+  metadata: {
+    siteId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Site'
+    },
+    vehicleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Vehicle'
+    },
+    inventoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Inventory'
+    },
+    dispatchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'InventoryDispatch'
+    }
   },
-  acknowledgedAt: Date,
+  acknowledgedBy: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    acknowledgedAt: {
+      type: Date,
+      default: Date.now
+    },
+    notes: String
+  }],
   resolvedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   },
-  resolvedAt: Date,
-  resolutionNotes: {
-    type: String,
-    maxlength: [500, 'Resolution notes cannot exceed 500 characters']
+  resolvedAt: {
+    type: Date
   },
-  metadata: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
+  resolutionNotes: String,
   expiresAt: {
-    type: Date,
-    default: null
-  }
+    type: Date
+  },
+  isRead: {
+    type: Boolean,
+    default: false
+  },
+  readBy: [{
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    readAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
 }, {
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  timestamps: true
 });
 
-// Indexes for better query performance
-alertSchema.index({ type: 1, status: 1 });
-alertSchema.index({ category: 1, severity: 1 });
-alertSchema.index({ assignedTo: 1, status: 1 });
-alertSchema.index({ createdBy: 1 });
+// Indexes for better performance
 alertSchema.index({ status: 1, createdAt: -1 });
+alertSchema.index({ targetUsers: 1, status: 1 });
+alertSchema.index({ targetRoles: 1, status: 1 });
+alertSchema.index({ type: 1, category: 1 });
 alertSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 // Virtual for time since creation
-alertSchema.virtual('timeSinceCreation').get(function() {
-  return Date.now() - this.createdAt.getTime();
-});
-
-// Virtual for time since acknowledgment
-alertSchema.virtual('timeSinceAcknowledgment').get(function() {
-  if (!this.acknowledgedAt) return null;
-  return Date.now() - this.acknowledgedAt.getTime();
-});
-
-// Virtual for time since resolution
-alertSchema.virtual('timeSinceResolution').get(function() {
-  if (!this.resolvedAt) return null;
-  return Date.now() - this.resolvedAt.getTime();
-});
-
-// Pre-save middleware to set priority based on severity
-alertSchema.pre('save', function(next) {
-  if (this.isModified('severity')) {
-    switch (this.severity) {
-      case 'critical':
-        this.priority = 'urgent';
-        break;
-      case 'high':
-        this.priority = 'high';
-        break;
-      case 'medium':
-        this.priority = 'medium';
-        break;
-      case 'low':
-        this.priority = 'low';
-        break;
-    }
-  }
-  next();
-});
-
-// Static method to get alert statistics
-alertSchema.statics.getAlertStats = async function(userId = null) {
-  const matchStage = userId ? { $or: [{ assignedTo: userId }, { createdBy: userId }] } : {};
+alertSchema.virtual('timeAgo').get(function() {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now - this.createdAt) / 1000);
   
-  const stats = await this.aggregate([
-    { $match: matchStage },
-    {
-      $group: {
-        _id: '$status',
-        count: { $sum: 1 }
-      }
-    }
-  ]);
+  if (diffInSeconds < 60) return 'Just now';
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+  return `${Math.floor(diffInSeconds / 86400)} days ago`;
+});
 
-  const result = {
-    active: 0,
-    acknowledged: 0,
-    resolved: 0,
-    dismissed: 0,
-    total: 0
-  };
-
-  stats.forEach(stat => {
-    result[stat._id] = stat.count;
-    result.total += stat.count;
-  });
-
-  return result;
+// Method to acknowledge alert
+alertSchema.methods.acknowledge = function(userId, notes = '') {
+  if (this.status === 'active') {
+    this.acknowledgedBy.push({
+      user: userId,
+      acknowledgedAt: new Date(),
+      notes
+    });
+    this.status = 'acknowledged';
+    return this.save();
+  }
+  return Promise.resolve(this);
 };
 
-// Static method to get alerts by category
-alertSchema.statics.getAlertsByCategory = async function(userId = null, category = null) {
-  const matchStage = { ...(userId ? { $or: [{ assignedTo: userId }, { createdBy: userId }] } : {}) };
-  if (category) matchStage.category = category;
+// Method to resolve alert
+alertSchema.methods.resolve = function(userId, resolutionNotes = '') {
+  this.resolvedBy = userId;
+  this.resolvedAt = new Date();
+  this.resolutionNotes = resolutionNotes;
+  this.status = 'resolved';
+  return this.save();
+};
 
-  return this.aggregate([
-    { $match: matchStage },
-    {
-      $group: {
-        _id: '$category',
-        count: { $sum: 1 },
-        active: {
-          $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] }
-        }
-      }
+// Method to dismiss alert
+alertSchema.methods.dismiss = function() {
+  this.status = 'dismissed';
+  return this.save();
+};
+
+// Static method to create system alerts
+alertSchema.statics.createSystemAlert = function(title, message, type, category, priority = 'medium', metadata = {}) {
+  return this.create({
+    title,
+    message,
+    type,
+    category,
+    priority,
+    metadata,
+    targetRoles: ['admin']
+  });
+};
+
+// Static method to create low stock alert
+alertSchema.statics.createLowStockAlert = function(inventoryItem, currentStock, minimumStock) {
+  return this.create({
+    title: 'Low Stock Alert',
+    message: `${inventoryItem.materialName} is running low. Current: ${currentStock}, Minimum: ${minimumStock}`,
+    type: 'warning',
+    category: 'inventory',
+    priority: 'high',
+    metadata: {
+      inventoryId: inventoryItem._id,
+      siteId: inventoryItem.siteId
     },
-    { $sort: { count: -1 } }
-  ]);
+    targetRoles: ['inventory_manager', 'admin']
+  });
+};
+
+// Static method to create vehicle maintenance alert
+alertSchema.statics.createVehicleMaintenanceAlert = function(vehicle, maintenanceType, daysUntilDue) {
+  return this.create({
+    title: 'Vehicle Maintenance Due',
+    message: `${vehicle.vehicleNumber} requires ${maintenanceType} in ${daysUntilDue} days`,
+    type: 'warning',
+    category: 'maintenance',
+    priority: daysUntilDue <= 1 ? 'critical' : 'medium',
+    metadata: {
+      vehicleId: vehicle._id
+    },
+    targetRoles: ['vehicle_manager', 'admin']
+  });
 };
 
 module.exports = mongoose.model('Alert', alertSchema);

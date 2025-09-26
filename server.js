@@ -28,6 +28,9 @@ const productionBatchRoutes = require('./routes/productionBatches');
 const plantOutputsRoutes = require('./routes/plantOutputs');
 const stepInventoryRoutes = require('./routes/stepInventory');
 const tripReportsRoutes = require('./routes/tripReports');
+const alertRoutes = require('./routes/alerts');
+const notificationRoutes = require('./routes/notifications');
+const recentActivitiesRoutes = require('./routes/recentActivities');
 const { initializeCronJobs } = require('./utils/cronJobs');
  
 // Load environment variables
@@ -115,7 +118,10 @@ app.get('/', (req, res) => {
       productionBatches: '/api/production-batches',
       plantOutputs: '/api/plant-outputs',
       stepInventory: '/api/step-inventory',
-      tripReports: '/api/trip-reports'
+      tripReports: '/api/trip-reports',
+      alerts: '/api/alerts',
+      notifications: '/api/notifications',
+      recentActivities: '/api/recent-activities'
     }
   });
 });
@@ -144,6 +150,9 @@ app.use('/api/production-batches', productionBatchRoutes);
 app.use('/api/plant-outputs', plantOutputsRoutes);
 app.use('/api/step-inventory', stepInventoryRoutes);
 app.use('/api/trip-reports', tripReportsRoutes);
+app.use('/api/alerts', alertRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/recent-activities', recentActivitiesRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
