@@ -615,15 +615,28 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
     
     await dispatch.save();
     
-    // Mark vehicle as available if dispatch is fully received
+    // Mark vehicle as available and increment trip count if dispatch is fully received
     if (dispatch.status === 'received' && dispatch.vehicle) {
       const Vehicle = require('../models/Vehicle');
+      const { incrementTripCount } = require('../utils/tripTracking');
+      
       const vehicle = await Vehicle.findById(dispatch.vehicle._id);
       if (vehicle) {
+        // Increment trip count for completed delivery
+        await incrementTripCount(vehicle._id, {
+          dispatchId: dispatch._id,
+          destination: dispatch.destination.type,
+          destinationName: dispatch.destination.name,
+          completedAt: new Date(),
+          notes: `Completed delivery: ${dispatch.itemName}`
+        });
+        
+        // Mark vehicle as available
         vehicle.status = 'available';
         vehicle.tripTracking.currentTrip = null; // Clear current trip
         await vehicle.save();
-        console.log(`Vehicle ${vehicle.vehicleNumber} marked as available (dispatch completed)`);
+        
+        console.log(`Vehicle ${vehicle.vehicleNumber} marked as available and trip count incremented (dispatch completed)`);
       }
     }
     

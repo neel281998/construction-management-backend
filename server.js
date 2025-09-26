@@ -27,6 +27,8 @@ const plantOutputDispatchRoutes = require('./routes/plantOutputDispatch');
 const productionBatchRoutes = require('./routes/productionBatches');
 const plantOutputsRoutes = require('./routes/plantOutputs');
 const stepInventoryRoutes = require('./routes/stepInventory');
+const tripReportsRoutes = require('./routes/tripReports');
+const { initializeCronJobs } = require('./utils/cronJobs');
  
 // Load environment variables
 require('dotenv').config();
@@ -112,7 +114,8 @@ app.get('/', (req, res) => {
       plantOutputDispatch: '/api/plant-output-dispatch',
       productionBatches: '/api/production-batches',
       plantOutputs: '/api/plant-outputs',
-      stepInventory: '/api/step-inventory'
+      stepInventory: '/api/step-inventory',
+      tripReports: '/api/trip-reports'
     }
   });
 });
@@ -140,6 +143,7 @@ app.use('/api/plant-output-dispatch', plantOutputDispatchRoutes);
 app.use('/api/production-batches', productionBatchRoutes);
 app.use('/api/plant-outputs', plantOutputsRoutes);
 app.use('/api/step-inventory', stepInventoryRoutes);
+app.use('/api/trip-reports', tripReportsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -174,6 +178,9 @@ if (require.main === module) {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:8081'}`);
     console.log(`🗄️  Database: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/construction_management'}`);
+    
+    // Initialize cron jobs
+    initializeCronJobs();
   });
 }
 

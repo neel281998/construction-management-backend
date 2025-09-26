@@ -27,6 +27,7 @@ const plantOutputDispatchRoutes = require('../routes/plantOutputDispatch');
 const productionBatchRoutes = require('../routes/productionBatches');
 const plantOutputsRoutes = require('../routes/plantOutputs');
 const stepInventoryRoutes = require('../routes/stepInventory');
+const tripReportsRoutes = require('../routes/tripReports');
 
 const app = express();
 
@@ -172,7 +173,8 @@ app.get('/', (req, res) => {
       plantOutputDispatch: '/api/plant-output-dispatch',
       productionBatches: '/api/production-batches',
       plantOutputs: '/api/plant-outputs',
-      stepInventory: '/api/step-inventory'
+      stepInventory: '/api/step-inventory',
+      tripReports: '/api/trip-reports'
     }
   });
 });
@@ -200,6 +202,7 @@ app.use('/api/plant-output-dispatch', plantOutputDispatchRoutes);
 app.use('/api/production-batches', productionBatchRoutes);
 app.use('/api/plant-outputs', plantOutputsRoutes);
 app.use('/api/step-inventory', stepInventoryRoutes);
+app.use('/api/trip-reports', tripReportsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
