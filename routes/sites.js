@@ -58,11 +58,56 @@ router.get('/', authenticateToken, requirePermission('site.read'), async (req, r
         .limit(parseInt(limit)),
       Site.countDocuments(query)
     ]);
+
+    // Calculate real-time progress for each site
+    const sitesWithProgress = await Promise.all(sites.map(async (site) => {
+      try {
+        // Get steps for this site
+        const steps = await Step.find({ siteId: site._id, isActive: true });
+        
+        if (steps.length === 0) {
+          return {
+            ...site.toObject(),
+            progress: 0,
+            totalProgressM3: 0,
+            estimatedVolumeM3: site.estimatedVolumeM3 || 0,
+            currentStep: 1
+          };
+        }
+
+        // Calculate progress from step data (same logic as progress endpoint)
+        const totalEstimatedM3 = steps.reduce((sum, step) => sum + step.estimatedVolumeM3, 0);
+        const totalProgressM3 = steps.reduce((sum, step) => sum + step.progressM3, 0);
+        const overallProgressPercentage = totalEstimatedM3 > 0 
+          ? Math.round((totalProgressM3 / totalEstimatedM3) * 100) 
+          : 0;
+        
+        // Find current step (first incomplete step)
+        const currentStep = steps.findIndex(step => step.status !== 'completed') + 1;
+
+        return {
+          ...site.toObject(),
+          progress: overallProgressPercentage,
+          totalProgressM3,
+          estimatedVolumeM3: totalEstimatedM3 || site.estimatedVolumeM3 || 0,
+          currentStep: currentStep > 0 ? currentStep : steps.length
+        };
+      } catch (error) {
+        console.error(`Error calculating progress for site ${site._id}:`, error);
+        return {
+          ...site.toObject(),
+          progress: site.progress || 0,
+          totalProgressM3: site.totalProgressM3 || 0,
+          estimatedVolumeM3: site.estimatedVolumeM3 || 0,
+          currentStep: site.currentStep || 1
+        };
+      }
+    }));
     
     res.json({
       success: true,
       data: {
-        sites,
+        sites: sitesWithProgress,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalCount / parseInt(limit)),
