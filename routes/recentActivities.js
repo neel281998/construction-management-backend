@@ -6,7 +6,7 @@ const Inventory = require('../models/Inventory');
 const InventoryDispatch = require('../models/InventoryDispatch');
 const InventoryReceipt = require('../models/InventoryReceipt');
 const Alert = require('../models/Alert');
-const { authenticateTokenenticateToken } = require('../middleware/authenticateToken');
+const { authenticateToken } = require('../middleware/auth');
 
 // Get recent activities
 router.get('/', authenticateToken, async (req, res) => {

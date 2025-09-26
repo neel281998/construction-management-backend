@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
-const { authenticateTokenenticateToken } = require('../middleware/authenticateToken');
+const { authenticateToken } = require('../middleware/auth');
 
 // Get all notifications for user
-router.get('/', authenticateTokenenticateToken, async (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
   try {
     const { page = 1, limit = 20, isRead, type, category } = req.query;
     const skip = (page - 1) * limit;
@@ -49,7 +49,7 @@ router.get('/', authenticateTokenenticateToken, async (req, res) => {
 });
 
 // Get notification by ID
-router.get('/:id', authenticateTokenenticateToken, async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id)
       .populate('metadata.siteId', 'name siteType')
