@@ -88,12 +88,32 @@ router.get('/', authenticateToken, async (req, res) => {
     });
 
     // Get recent inventory activities
-    const lowStockItems = await Inventory.find({
-      currentStock: { $lte: { $multiply: ['$minimumStock', 1.2] } } // 20% above minimum
-    })
-      .sort({ updatedAt: -1 })
-      .limit(3)
-      .select('materialName currentStock minimumStock updatedAt');
+    const lowStockItems = await Inventory.aggregate([
+      {
+        $addFields: {
+          threshold: { $multiply: ['$minimumStock', 1.2] } // 20% above minimum
+        }
+      },
+      {
+        $match: {
+          currentStock: { $lte: '$threshold' }
+        }
+      },
+      {
+        $sort: { updatedAt: -1 }
+      },
+      {
+        $limit: 3
+      },
+      {
+        $project: {
+          materialName: 1,
+          currentStock: 1,
+          minimumStock: 1,
+          updatedAt: 1
+        }
+      }
+    ]);
 
     lowStockItems.forEach(item => {
       activities.push({

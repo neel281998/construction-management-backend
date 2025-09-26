@@ -144,3 +144,5 @@ stepInventoryConsumptionSchema.methods.rejectConsumption = function(rejectionRea
 
 module.exports = mongoose.model('StepInventoryConsumption', stepInventoryConsumptionSchema);
 
+
+
