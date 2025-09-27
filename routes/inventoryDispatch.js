@@ -363,6 +363,56 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
       console.log(`Vehicle ${vehicle.vehicleNumber} marked as available`);
     }
     
+    // Reduce inventory from source storage site
+    if (transfer.fromStorageSite && transfer.fromStorageSite._id) {
+      console.log('Reducing inventory from source storage site:', transfer.fromStorageSite._id);
+      const sourceItem = await require('../models/Inventory').findOne({
+        itemName: transfer.itemName,
+        storageSite: transfer.fromStorageSite._id,
+        isActive: true
+      });
+      
+      if (sourceItem) {
+        console.log('Found source inventory item:', {
+          itemName: sourceItem.itemName,
+          currentStock: sourceItem.currentStock,
+          transferQty: receivedQty,
+          newStock: sourceItem.currentStock - receivedQty
+        });
+        
+        if (sourceItem.currentStock >= receivedQty) {
+          sourceItem.currentStock -= receivedQty;
+          
+          // Update existing transfer history entry
+          const existingTransferIndex = sourceItem.transferHistory.findIndex(
+            entry => entry.transferId && entry.transferId.toString() === transfer._id.toString()
+          );
+          
+          if (existingTransferIndex !== -1) {
+            sourceItem.transferHistory[existingTransferIndex].status = 'delivered';
+            sourceItem.transferHistory[existingTransferIndex].deliveredAt = new Date();
+            sourceItem.transferHistory[existingTransferIndex].deliveredBy = req.user._id;
+            console.log('Updated source transfer history entry');
+          }
+          
+          await sourceItem.save();
+          console.log('Source inventory reduced successfully');
+        } else {
+          console.log('Insufficient stock at source for transfer');
+          return res.status(400).json({
+            success: false,
+            message: 'Insufficient stock at source storage site'
+          });
+        }
+      } else {
+        console.log('Source inventory item not found');
+        return res.status(404).json({
+          success: false,
+          message: 'Source inventory item not found'
+        });
+      }
+    }
+    
     // Add inventory to destination based on transfer type
     console.log('Transfer details:', {
       toPlant: transfer.toPlant,
