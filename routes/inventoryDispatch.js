@@ -364,6 +364,13 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
     }
     
     // Add inventory to destination based on transfer type
+    console.log('Transfer details:', {
+      toPlant: transfer.toPlant,
+      toStorageSite: transfer.toStorageSite,
+      itemName: transfer.itemName,
+      quantity: transfer.quantity
+    });
+    
     if (transfer.toPlant) {
       console.log('Processing plant transfer to:', transfer.toPlant._id);
       const PlantInventory = require('../models/PlantInventory');
@@ -442,7 +449,9 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
         }
       }
     } else if (transfer.toStorageSite) {
+      console.log('Processing storage site transfer to:', transfer.toStorageSite._id);
       const destinationStorageSite = await require('../models/StorageSite').findById(transfer.toStorageSite._id);
+      console.log('Found destination storage site:', destinationStorageSite ? destinationStorageSite.name : 'Not found');
       
       if (destinationStorageSite) {
         // Check if destination already has this item
@@ -452,8 +461,20 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
           isActive: true
         });
         
+        console.log('Searching for inventory item:', {
+          itemName: transfer.itemName,
+          storageSite: transfer.toStorageSite._id,
+          found: !!destinationItem
+        });
+        
         if (destinationItem) {
           // Update existing item at destination
+          console.log('Found existing inventory item:', {
+            itemName: destinationItem.itemName,
+            currentStock: destinationItem.currentStock,
+            receivedQty: receivedQty,
+            newStock: destinationItem.currentStock + receivedQty
+          });
           destinationItem.currentStock += receivedQty;
           
           // Add to transfer history
