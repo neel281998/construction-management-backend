@@ -449,8 +449,9 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
       quantity: transfer.quantity
     });
     
-    // Check if this is an outgoing transfer (from storage site to plant/other storage site)
-    const isOutgoingTransfer = transfer.fromStorageSite && (transfer.toPlant || transfer.toStorageSite);
+    // Check if this is an outgoing transfer (from storage site to plant only)
+    // Storage site to storage site transfers are NOT outgoing transfers
+    const isOutgoingTransfer = transfer.fromStorageSite && transfer.toPlant && !transfer.toStorageSite;
     console.log('Is outgoing transfer:', isOutgoingTransfer);
     
     if (transfer.toPlant) {
