@@ -363,8 +363,8 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
       console.log(`Vehicle ${vehicle.vehicleNumber} marked as available`);
     }
     
-    // Reduce inventory from source storage site
-    if (transfer.fromStorageSite && transfer.fromStorageSite._id) {
+    // Reduce inventory from source storage site (only for incoming transfers)
+    if (transfer.fromStorageSite && transfer.fromStorageSite._id && !isOutgoingTransfer) {
       console.log('Reducing inventory from source storage site:', transfer.fromStorageSite._id);
       const sourceItem = await require('../models/Inventory').findOne({
         itemName: transfer.itemName,
@@ -413,13 +413,45 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
       }
     }
     
+    // Handle outgoing transfers - update source transfer history without reducing inventory
+    if (isOutgoingTransfer && transfer.fromStorageSite && transfer.fromStorageSite._id) {
+      console.log('Processing outgoing transfer - updating source transfer history');
+      const sourceItem = await require('../models/Inventory').findOne({
+        itemName: transfer.itemName,
+        storageSite: transfer.fromStorageSite._id,
+        isActive: true
+      });
+      
+      if (sourceItem) {
+        // Update existing transfer history entry
+        const existingTransferIndex = sourceItem.transferHistory.findIndex(
+          entry => entry.transferId && entry.transferId.toString() === transfer._id.toString()
+        );
+        
+        if (existingTransferIndex !== -1) {
+          sourceItem.transferHistory[existingTransferIndex].status = 'delivered';
+          sourceItem.transferHistory[existingTransferIndex].deliveredAt = new Date();
+          sourceItem.transferHistory[existingTransferIndex].deliveredBy = req.user._id;
+          console.log('Updated outgoing transfer history entry');
+          await sourceItem.save();
+        } else {
+          console.log('Outgoing transfer history entry not found');
+        }
+      }
+    }
+    
     // Add inventory to destination based on transfer type
     console.log('Transfer details:', {
       toPlant: transfer.toPlant,
       toStorageSite: transfer.toStorageSite,
+      fromStorageSite: transfer.fromStorageSite,
       itemName: transfer.itemName,
       quantity: transfer.quantity
     });
+    
+    // Check if this is an outgoing transfer (from storage site to plant/other storage site)
+    const isOutgoingTransfer = transfer.fromStorageSite && (transfer.toPlant || transfer.toStorageSite);
+    console.log('Is outgoing transfer:', isOutgoingTransfer);
     
     if (transfer.toPlant) {
       console.log('Processing plant transfer to:', transfer.toPlant._id);
