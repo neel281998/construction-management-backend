@@ -353,6 +353,11 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
     
     await transfer.save();
     
+    // Check if this is an outgoing transfer (from storage site to plant only)
+    // Storage site to storage site transfers are NOT outgoing transfers
+    const isOutgoingTransfer = transfer.fromStorageSite && transfer.toPlant && !transfer.toStorageSite;
+    console.log('Is outgoing transfer:', isOutgoingTransfer);
+    
     // Mark vehicle as available again since transfer is completed
     const Vehicle = require('../models/Vehicle');
     const vehicle = await Vehicle.findById(transfer.vehicle._id);
@@ -448,11 +453,6 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
       itemName: transfer.itemName,
       quantity: transfer.quantity
     });
-    
-    // Check if this is an outgoing transfer (from storage site to plant only)
-    // Storage site to storage site transfers are NOT outgoing transfers
-    const isOutgoingTransfer = transfer.fromStorageSite && transfer.toPlant && !transfer.toStorageSite;
-    console.log('Is outgoing transfer:', isOutgoingTransfer);
     
     // Validate transfer data
     if (!transfer.itemName || !transfer.quantity) {
