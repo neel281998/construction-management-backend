@@ -389,16 +389,30 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
           // Update existing item at destination
           destinationItem.currentStock += receivedQty;
           
-          // Add to transfer history
-          destinationItem.transferHistory.push({
-            fromStorageSite: transfer.fromStorageSite._id,
-            toPlant: transfer.toPlant._id,
-            quantity: receivedQty,
-            transferredBy: req.user._id,
-            notes: `Received from transfer: ${notes}`,
-            transferId: transfer._id,
-            status: 'delivered'
-          });
+          // Update existing transfer history entry instead of adding new one
+          const existingTransferIndex = destinationItem.transferHistory.findIndex(
+            entry => entry.transferId && entry.transferId.toString() === transfer._id.toString()
+          );
+          
+          if (existingTransferIndex !== -1) {
+            // Update existing entry
+            destinationItem.transferHistory[existingTransferIndex].status = 'delivered';
+            destinationItem.transferHistory[existingTransferIndex].receivedAt = new Date();
+            destinationItem.transferHistory[existingTransferIndex].receivedBy = req.user._id;
+            console.log('Updated existing plant transfer history entry');
+          } else {
+            // Add new entry if not found (fallback)
+            destinationItem.transferHistory.push({
+              fromStorageSite: transfer.fromStorageSite._id,
+              toPlant: transfer.toPlant._id,
+              quantity: receivedQty,
+              transferredBy: req.user._id,
+              notes: `Received from transfer: ${notes}`,
+              transferId: transfer._id,
+              status: 'delivered'
+            });
+            console.log('Added new plant transfer history entry');
+          }
           
           await destinationItem.save();
         } else {
@@ -477,16 +491,30 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
           });
           destinationItem.currentStock += receivedQty;
           
-          // Add to transfer history
-          destinationItem.transferHistory.push({
-            fromStorageSite: transfer.fromStorageSite._id,
-            toStorageSite: transfer.toStorageSite._id,
-            quantity: receivedQty,
-            transferredBy: req.user._id,
-            notes: `Received from transfer: ${notes}`,
-            transferId: transfer._id,
-            status: 'delivered'
-          });
+          // Update existing transfer history entry instead of adding new one
+          const existingTransferIndex = destinationItem.transferHistory.findIndex(
+            entry => entry.transferId && entry.transferId.toString() === transfer._id.toString()
+          );
+          
+          if (existingTransferIndex !== -1) {
+            // Update existing entry
+            destinationItem.transferHistory[existingTransferIndex].status = 'delivered';
+            destinationItem.transferHistory[existingTransferIndex].receivedAt = new Date();
+            destinationItem.transferHistory[existingTransferIndex].receivedBy = req.user._id;
+            console.log('Updated existing transfer history entry');
+          } else {
+            // Add new entry if not found (fallback)
+            destinationItem.transferHistory.push({
+              fromStorageSite: transfer.fromStorageSite._id,
+              toStorageSite: transfer.toStorageSite._id,
+              quantity: receivedQty,
+              transferredBy: req.user._id,
+              notes: `Received from transfer: ${notes}`,
+              transferId: transfer._id,
+              status: 'delivered'
+            });
+            console.log('Added new transfer history entry');
+          }
           
           await destinationItem.save();
         } else {
