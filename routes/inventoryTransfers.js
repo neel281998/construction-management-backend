@@ -468,12 +468,25 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
       });
     }
     
-    // Check access control for destination storage site
-    if (req.user.role !== 'admin' && !req.user.assignedStorageSites.includes(transfer.toStorageSite._id)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied to destination storage site'
-      });
+    // Check access control for destination (storage site or plant)
+    if (req.user.role !== 'admin') {
+      if (transfer.toStorageSite && transfer.toStorageSite._id) {
+        // Check storage site access
+        if (!req.user.assignedStorageSites.includes(transfer.toStorageSite._id)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied to destination storage site'
+          });
+        }
+      } else if (transfer.toPlant && transfer.toPlant._id) {
+        // Check plant access
+        if (!req.user.assignedPlants || !req.user.assignedPlants.includes(transfer.toPlant._id)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied to destination plant'
+          });
+        }
+      }
     }
     
     // Calculate quantity difference and discrepancy
@@ -516,25 +529,82 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
     transfer.receivedAt = new Date();
     await transfer.save();
     
-    // Add inventory to destination storage site
-    const destinationStorageSite = await StorageSite.findById(transfer.toStorageSite._id);
-    
-    if (destinationStorageSite) {
-      // Check if destination already has this item
-      let destinationItem = await Inventory.findOne({
-        itemName: transfer.itemName,
-        storageSite: transfer.toStorageSite._id,
+    // Add inventory to destination (storage site or plant)
+    if (transfer.toStorageSite && transfer.toStorageSite._id) {
+      // Handle storage site transfer
+      const destinationStorageSite = await StorageSite.findById(transfer.toStorageSite._id);
+      
+      if (destinationStorageSite) {
+        // Check if destination already has this item
+        let destinationItem = await Inventory.findOne({
+          itemName: transfer.itemName,
+          storageSite: transfer.toStorageSite._id,
+          isActive: true
+        });
+        
+        if (destinationItem) {
+          // Update existing item at destination
+          destinationItem.currentStock += receivedQty;
+          
+          // Add to transfer history
+          destinationItem.transferHistory.push({
+            fromStorageSite: transfer.fromStorageSite._id,
+            toStorageSite: transfer.toStorageSite._id,
+            quantity: receivedQty,
+            transferredBy: req.user._id,
+            notes: `Received from transfer: ${notes}`,
+            transferId: transfer._id,
+            status: 'received'
+          });
+          
+          await destinationItem.save();
+        } else {
+          // Create new item at destination
+          destinationItem = new Inventory({
+            itemName: transfer.itemName,
+            category: transfer.category,
+            unit: transfer.unit,
+            currentStock: receivedQty,
+            minimumStock: 0,
+            maximumStock: receivedQty * 2, // Set reasonable default
+            storageSite: transfer.toStorageSite._id,
+            supplier: null,
+            lastRestocked: new Date(),
+            transferHistory: [{
+              fromStorageSite: transfer.fromStorageSite._id,
+              toStorageSite: transfer.toStorageSite._id,
+              quantity: receivedQty,
+              transferredBy: req.user._id,
+              notes: `Received from transfer: ${notes}`,
+              transferId: transfer._id,
+              status: 'received'
+            }],
+            isActive: true
+          });
+          
+          await destinationItem.save();
+        }
+      }
+    } else if (transfer.toPlant && transfer.toPlant._id) {
+      // Handle plant transfer - update plant inventory
+      const PlantInventory = require('../models/PlantInventory');
+      
+      // Check if plant already has this item
+      let plantItem = await PlantInventory.findOne({
+        materialName: transfer.itemName,
+        plant: transfer.toPlant._id,
         isActive: true
       });
       
-      if (destinationItem) {
-        // Update existing item at destination
-        destinationItem.currentStock += receivedQty;
+      if (plantItem) {
+        // Update existing plant inventory item
+        plantItem.currentStock += receivedQty;
         
         // Add to transfer history
-        destinationItem.transferHistory.push({
+        plantItem.transferHistory = plantItem.transferHistory || [];
+        plantItem.transferHistory.push({
           fromStorageSite: transfer.fromStorageSite._id,
-          toStorageSite: transfer.toStorageSite._id,
+          toPlant: transfer.toPlant._id,
           quantity: receivedQty,
           transferredBy: req.user._id,
           notes: `Received from transfer: ${notes}`,
@@ -542,22 +612,22 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
           status: 'received'
         });
         
-        await destinationItem.save();
+        await plantItem.save();
       } else {
-        // Create new item at destination
-        destinationItem = new Inventory({
-          itemName: transfer.itemName,
-          category: transfer.category,
+        // Create new plant inventory item
+        plantItem = new PlantInventory({
+          materialName: transfer.itemName,
+          materialType: transfer.category,
           unit: transfer.unit,
           currentStock: receivedQty,
           minimumStock: 0,
           maximumStock: receivedQty * 2, // Set reasonable default
-          storageSite: transfer.toStorageSite._id,
+          plant: transfer.toPlant._id,
           supplier: null,
           lastRestocked: new Date(),
           transferHistory: [{
             fromStorageSite: transfer.fromStorageSite._id,
-            toStorageSite: transfer.toStorageSite._id,
+            toPlant: transfer.toPlant._id,
             quantity: receivedQty,
             transferredBy: req.user._id,
             notes: `Received from transfer: ${notes}`,
@@ -567,7 +637,7 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
           isActive: true
         });
         
-        await destinationItem.save();
+        await plantItem.save();
       }
     }
     
