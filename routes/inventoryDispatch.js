@@ -454,6 +454,15 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
     const isOutgoingTransfer = transfer.fromStorageSite && transfer.toPlant && !transfer.toStorageSite;
     console.log('Is outgoing transfer:', isOutgoingTransfer);
     
+    // Validate transfer data
+    if (!transfer.itemName || !transfer.quantity) {
+      console.log('Invalid transfer data:', { itemName: transfer.itemName, quantity: transfer.quantity });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid transfer data - missing item name or quantity'
+      });
+    }
+    
     if (transfer.toPlant) {
       console.log('Processing plant transfer to:', transfer.toPlant._id);
       const PlantInventory = require('../models/PlantInventory');
@@ -547,8 +556,9 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
       }
     } else if (transfer.toStorageSite) {
       console.log('Processing storage site transfer to:', transfer.toStorageSite._id);
-      const destinationStorageSite = await require('../models/StorageSite').findById(transfer.toStorageSite._id);
-      console.log('Found destination storage site:', destinationStorageSite ? destinationStorageSite.name : 'Not found');
+      try {
+        const destinationStorageSite = await require('../models/StorageSite').findById(transfer.toStorageSite._id);
+        console.log('Found destination storage site:', destinationStorageSite ? destinationStorageSite.name : 'Not found');
       
       if (destinationStorageSite) {
         // Check if destination already has this item
@@ -623,6 +633,13 @@ router.post('/receive-transfer', authenticateToken, requirePermission('inventory
           
           await destinationItem.save();
         }
+      }
+      } catch (error) {
+        console.error('Storage site transfer error:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to process storage site transfer'
+        });
       }
     }
     
