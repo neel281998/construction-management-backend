@@ -118,7 +118,7 @@ router.post('/admin/create-user', authenticateToken, async (req, res) => {
     }
     
     // Validate role
-    const validRoles = ['admin', 'site_manager', 'supervisor', 'inventory_manager', 'inventory_assistant', 'worker'];
+    const validRoles = ['admin', 'site_manager', 'supervisor', 'inventory_manager', 'inventory_assistant', 'worker', 'fuel_main_manager', 'fuel_sub_manager'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,

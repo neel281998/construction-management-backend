@@ -63,9 +63,7 @@ const fuelStorageSchema = new mongoose.Schema({
   siteId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Site',
-    required: function() {
-      return this.storageType === 'sub';
-    }
+    required: false
   },
   manager: {
     type: mongoose.Schema.Types.ObjectId,

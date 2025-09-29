@@ -66,8 +66,15 @@ router.get('/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Create new fuel storage
-router.post('/', authenticateToken, requirePermission('fuel.create'), async (req, res) => {
+// Create new fuel storage (Admin, Fuel Main Manager, Fuel Sub Manager)
+router.post('/', authenticateToken, async (req, res) => {
+  // Check if user has fuel management role
+  if (!['admin', 'fuel_main_manager', 'fuel_sub_manager'].includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Fuel management role required.'
+    });
+  }
   try {
     const storageData = {
       ...req.body,
@@ -98,8 +105,15 @@ router.post('/', authenticateToken, requirePermission('fuel.create'), async (req
   }
 });
 
-// Update fuel storage
-router.put('/:id', authenticateToken, requirePermission('fuel.update'), async (req, res) => {
+// Update fuel storage (Admin, Fuel Main Manager, Fuel Sub Manager)
+router.put('/:id', authenticateToken, async (req, res) => {
+  // Check if user has fuel management role
+  if (!['admin', 'fuel_main_manager', 'fuel_sub_manager'].includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Fuel management role required.'
+    });
+  }
   try {
     const updateData = {
       ...req.body,
@@ -139,7 +153,15 @@ router.put('/:id', authenticateToken, requirePermission('fuel.update'), async (r
 });
 
 // Update fuel reading (restock)
-router.post('/:id/restock', authenticateToken, requirePermission('fuel.update'), async (req, res) => {
+// Restock fuel storage (Admin, Fuel Main Manager, Fuel Sub Manager)
+router.post('/:id/restock', authenticateToken, async (req, res) => {
+  // Check if user has fuel management role
+  if (!['admin', 'fuel_main_manager', 'fuel_sub_manager'].includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Fuel management role required.'
+    });
+  }
   try {
     const { quantityLiters, costPerLiter, notes } = req.body;
     
@@ -208,8 +230,15 @@ router.post('/:id/restock', authenticateToken, requirePermission('fuel.update'),
   }
 });
 
-// Delete fuel storage
-router.delete('/:id', authenticateToken, requirePermission('fuel.delete'), async (req, res) => {
+// Delete fuel storage (Admin only)
+router.delete('/:id', authenticateToken, async (req, res) => {
+  // Check if user is admin
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Admin privileges required.'
+    });
+  }
   try {
     const storage = await FuelStorage.findByIdAndDelete(req.params.id);
     
@@ -310,14 +339,11 @@ router.get('/main/storage', authenticateToken, async (req, res) => {
   }
 });
 
-// Get sub storages for a specific site
-router.get('/site/:siteId/sub-storages', authenticateToken, async (req, res) => {
+// Get all sub storages (assigned to managers)
+router.get('/sub-storages', authenticateToken, async (req, res) => {
   try {
-    const { siteId } = req.params;
-    
     const subStorages = await FuelStorage.find({ 
-      storageType: 'sub', 
-      siteId: siteId 
+      storageType: 'sub'
     })
       .populate('parentStorageId', 'name location')
       .populate('manager', 'firstName lastName email role')

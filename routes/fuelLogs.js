@@ -365,8 +365,15 @@ router.get('/reports/efficiency', authenticateToken, async (req, res) => {
   }
 });
 
-// Refuel vehicle from sub storage
-router.post('/refuel-vehicle', authenticateToken, requirePermission('fuel_management'), async (req, res) => {
+// Refuel vehicle from sub storage (Admin, Fuel Sub Manager)
+router.post('/refuel-vehicle', authenticateToken, async (req, res) => {
+  // Check if user has fuel management role
+  if (!['admin', 'fuel_sub_manager'].includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Fuel sub manager role required.'
+    });
+  }
   try {
     const { 
       vehicleId, 
