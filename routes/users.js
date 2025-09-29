@@ -526,4 +526,154 @@ router.post('/fix-admin-permissions', authenticateToken, requireAdmin, async (re
   }
 });
 
+// Check current user permissions (debug endpoint)
+router.get('/my-permissions', authenticateToken, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        user: {
+          email: req.user.email,
+          role: req.user.role,
+          permissions: req.user.permissions || []
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get user permissions',
+      error: error.message
+    });
+  }
+});
+
+// Fix all user permissions (temporary endpoint)
+router.post('/fix-all-permissions', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    console.log('Fixing all user permissions...');
+    
+    // Define role permissions (same as in User.js)
+    const rolePermissions = {
+      admin: [
+        'user.create', 'user.read', 'user.update', 'user.delete',
+        'site.create', 'site.read', 'site.update', 'site.delete',
+        'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
+        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+        'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
+        'plant.create', 'plant.read', 'plant.update', 'plant.delete',
+        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
+        'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+        'attendance.read', 'attendance.approve',
+        'report.generate', 'report.export'
+      ],
+      site_manager: [
+        'site.read', 'site.update',
+        'attendance.read', 'attendance.approve',
+        'report.generate'
+      ],
+      supervisor: [
+        'user.create', 'user.read',
+        'site.create', 'site.read',
+        'vehicle.create', 'vehicle.read',
+        'inventory.create', 'inventory.read',
+        'attendance.read', 'attendance.approve',
+        'report.generate'
+      ],
+      worker: [
+        'site.read',
+        'attendance.create', 'attendance.read'
+      ],
+      inventory_manager: [
+        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+        'storage_site.read', 'storage_site.update',
+        'report.generate'
+      ],
+      inventory_assistant: [
+        'inventory.read', 'inventory.update',
+        'storage_site.read'
+      ],
+      step_manager: [
+        'step.create', 'step.read', 'step.update', 'step.delete',
+        'site.read',
+        'user.read',
+        'report.generate'
+      ],
+      plant_manager: [
+        'plant.read', 'plant.update',
+        'plant_inventory.read', 'plant_inventory.update',
+        'plant_output.read', 'plant_output.update',
+        'site.read',
+        'report.generate'
+      ],
+      plant_operator: [
+        'plant.read',
+        'plant_inventory.read', 'plant_inventory.update',
+        'plant_output.create', 'plant_output.read', 'plant_output.update',
+        'site.read',
+        'report.generate'
+      ]
+    };
+
+    // Get all users
+    const allUsers = await User.find({});
+    console.log(`Found ${allUsers.length} total users`);
+
+    let updatedCount = 0;
+    const results = [];
+
+    // Update each user based on their role
+    for (const user of allUsers) {
+      const expectedPermissions = rolePermissions[user.role] || [];
+      
+      // Check if permissions need updating
+      const currentPermissions = user.permissions || [];
+      const needsUpdate = JSON.stringify(currentPermissions.sort()) !== JSON.stringify(expectedPermissions.sort());
+      
+      if (needsUpdate) {
+        console.log(`Updating ${user.role} user: ${user.email}`);
+        
+        // Update permissions
+        user.permissions = expectedPermissions;
+        
+        // Save the user
+        await user.save();
+        
+        results.push({
+          email: user.email,
+          role: user.role,
+          updated: true,
+          permissionsCount: expectedPermissions.length
+        });
+        updatedCount++;
+      } else {
+        results.push({
+          email: user.email,
+          role: user.role,
+          updated: false,
+          permissionsCount: currentPermissions.length
+        });
+      }
+    }
+
+    console.log(`Updated ${updatedCount} users successfully!`);
+    
+    res.json({
+      success: true,
+      message: `Updated ${updatedCount} out of ${allUsers.length} users`,
+      updatedCount,
+      totalUsers: allUsers.length,
+      results
+    });
+
+  } catch (error) {
+    console.error('Error fixing all user permissions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fix all user permissions',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;

@@ -32,6 +32,7 @@ const authenticateToken = async (req, res, next) => {
     }
     
     req.user = user;
+    console.log(`Authenticated user: ${user.email}, role: ${user.role}, permissions: ${user.permissions?.length || 0}`);
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -57,6 +58,16 @@ const requirePermission = (permission) => {
         message: 'Authentication required'
       });
     }
+    
+    // Admin users bypass all permission checks
+    if (req.user.role === 'admin') {
+      console.log(`Admin user ${req.user.email} bypassing permission check for: ${permission}`);
+      return next();
+    }
+    
+    // Debug logging
+    console.log(`User ${req.user.email} (role: ${req.user.role}) checking permission: ${permission}`);
+    console.log(`User permissions:`, req.user.permissions);
     
     if (!req.user.permissions.includes(permission)) {
       return res.status(403).json({
