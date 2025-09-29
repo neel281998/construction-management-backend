@@ -15,10 +15,18 @@ const generateToken = (userId) => {
   );
 };
 
-// Register new user
+// Register new user (Public registration - only worker role allowed)
 router.post('/register', async (req, res) => {
   try {
-    const { email, phone, password, firstName, lastName, role } = req.body;
+    const { email, phone, password, firstName, lastName } = req.body;
+    
+    // Validate required fields
+    if (!email || !phone || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required'
+      });
+    }
     
     // Check if user already exists
     const existingUser = await User.findOne({
@@ -32,35 +40,39 @@ router.post('/register', async (req, res) => {
       });
     }
     
-    // Create new user
+    // Create new user - ONLY worker role allowed for public registration
     const user = new User({
       email,
       phone,
       password,
       firstName,
       lastName,
-      role: role || 'worker',
-      isVerified: true // Auto-verify user
+      role: 'worker', // Force worker role for public registration
+      isVerified: false, // Require email verification
+      status: 'pending' // Set to pending until admin approval
     });
     
     await user.save();
     
-    // Generate JWT token for immediate login
-    const token = generateToken(user._id);
+    // Send verification email
+    try {
+      await sendOTPEmail(email, '123456'); // In production, generate real OTP
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError);
+      // Continue with registration even if email fails
+    }
     
     res.status(201).json({
       success: true,
-      message: 'User registered successfully!',
+      message: 'Registration successful! Please verify your email and wait for admin approval.',
       data: {
-        token,
         user: {
           _id: user._id,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role,
-          permissions: user.permissions,
-          assignedSites: user.assignedSites
+          status: user.status
         }
       }
     });
@@ -80,6 +92,236 @@ router.post('/register', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Registration failed. Please try again.'
+    });
+  }
+});
+
+// Admin-only user creation endpoint
+router.post('/admin/create-user', authenticateToken, async (req, res) => {
+  try {
+    // Check if current user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+    
+    const { email, phone, password, firstName, lastName, role } = req.body;
+    
+    // Validate required fields
+    if (!email || !phone || !password || !firstName || !lastName || !role) {
+      return res.status(400).json({
+        success: false,
+        message: 'All fields are required including role'
+      });
+    }
+    
+    // Validate role
+    const validRoles = ['admin', 'site_manager', 'supervisor', 'inventory_manager', 'inventory_assistant', 'worker'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid role specified'
+      });
+    }
+    
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [{ email }, { phone }]
+    });
+    
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: 'User with this email or phone already exists'
+      });
+    }
+    
+    // Create new user with admin-specified role
+    const user = new User({
+      email,
+      phone,
+      password,
+      firstName,
+      lastName,
+      role,
+      isVerified: true, // Admin-created users are auto-verified
+      status: 'active' // Admin-created users are immediately active
+    });
+    
+    await user.save();
+    
+    res.status(201).json({
+      success: true,
+      message: 'User created successfully!',
+      data: {
+        user: {
+          _id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          status: user.status,
+          permissions: user.permissions
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Admin user creation error:', error);
+    
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'User creation failed. Please try again.'
+    });
+  }
+});
+
+// Get pending users (Admin only)
+router.get('/admin/pending-users', authenticateToken, async (req, res) => {
+  try {
+    // Check if current user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+    
+    const pendingUsers = await User.find({ 
+      status: 'pending',
+      isVerified: false 
+    }).select('-password');
+    
+    res.json({
+      success: true,
+      data: pendingUsers
+    });
+    
+  } catch (error) {
+    console.error('Error fetching pending users:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pending users'
+    });
+  }
+});
+
+// Approve user (Admin only)
+router.post('/admin/approve-user/:userId', authenticateToken, async (req, res) => {
+  try {
+    // Check if current user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+    
+    const { userId } = req.params;
+    const { role } = req.body; // Optional role change during approval
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    if (user.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'User is not pending approval'
+      });
+    }
+    
+    // Update user status and role
+    user.status = 'active';
+    user.isVerified = true;
+    if (role && ['admin', 'site_manager', 'supervisor', 'inventory_manager', 'inventory_assistant', 'worker'].includes(role)) {
+      user.role = role;
+    }
+    
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'User approved successfully',
+      data: {
+        user: {
+          _id: user._id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          status: user.status
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error approving user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to approve user'
+    });
+  }
+});
+
+// Reject user (Admin only)
+router.post('/admin/reject-user/:userId', authenticateToken, async (req, res) => {
+  try {
+    // Check if current user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin privileges required.'
+      });
+    }
+    
+    const { userId } = req.params;
+    const { reason } = req.body;
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    if (user.status !== 'pending') {
+      return res.status(400).json({
+        success: false,
+        message: 'User is not pending approval'
+      });
+    }
+    
+    // Delete the user or mark as rejected
+    await User.findByIdAndDelete(userId);
+    
+    res.json({
+      success: true,
+      message: 'User rejected and removed',
+      data: { reason: reason || 'No reason provided' }
+    });
+    
+  } catch (error) {
+    console.error('Error rejecting user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reject user'
     });
   }
 });
