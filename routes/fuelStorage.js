@@ -6,19 +6,22 @@ const { authenticateToken, requirePermission } = require('../middleware/auth');
 // Get all fuel storages
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const { siteId, fuelType, isMainStorage, status } = req.query;
+    const { siteId, fuelType, storageType, status, parentStorageId } = req.query;
     
     const filter = {};
     if (siteId) filter.siteId = siteId;
     if (fuelType) filter.fuelType = fuelType;
-    if (isMainStorage !== undefined) filter.isMainStorage = isMainStorage === 'true';
+    if (storageType) filter.storageType = storageType;
     if (status) filter.status = status;
+    if (parentStorageId) filter.parentStorageId = parentStorageId;
 
     const storages = await FuelStorage.find(filter)
       .populate('siteId', 'name address')
+      .populate('parentStorageId', 'name location')
+      .populate('manager', 'firstName lastName email role')
       .populate('createdBy', 'firstName lastName email')
       .populate('lastUpdatedBy', 'firstName lastName email')
-      .sort({ createdAt: -1 });
+      .sort({ storageType: 1, createdAt: -1 });
 
     res.json({
       success: true,
@@ -273,6 +276,212 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch fuel storage statistics',
+      error: error.message
+    });
+  }
+});
+
+// Get main storage (only one should exist)
+router.get('/main/storage', authenticateToken, async (req, res) => {
+  try {
+    const mainStorage = await FuelStorage.findOne({ storageType: 'main' })
+      .populate('manager', 'firstName lastName email role')
+      .populate('createdBy', 'firstName lastName email')
+      .populate('lastUpdatedBy', 'firstName lastName email');
+
+    if (!mainStorage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Main fuel storage not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: mainStorage
+    });
+  } catch (error) {
+    console.error('Error fetching main storage:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch main storage',
+      error: error.message
+    });
+  }
+});
+
+// Get sub storages for a specific site
+router.get('/site/:siteId/sub-storages', authenticateToken, async (req, res) => {
+  try {
+    const { siteId } = req.params;
+    
+    const subStorages = await FuelStorage.find({ 
+      storageType: 'sub', 
+      siteId: siteId 
+    })
+      .populate('parentStorageId', 'name location')
+      .populate('manager', 'firstName lastName email role')
+      .populate('siteId', 'name address')
+      .sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      data: subStorages
+    });
+  } catch (error) {
+    console.error('Error fetching sub storages:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch sub storages',
+      error: error.message
+    });
+  }
+});
+
+// Update daily reading
+router.post('/:id/daily-reading', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reading, notes } = req.body;
+    const userId = req.user.id;
+
+    if (!reading || reading < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid reading amount is required'
+      });
+    }
+
+    const storage = await FuelStorage.findById(id);
+    if (!storage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Fuel storage not found'
+      });
+    }
+
+    // Update current reading and today's reading
+    storage.currentReading = reading;
+    storage.todayReading = reading;
+    storage.lastReadingDate = new Date();
+    storage.lastUpdatedBy = userId;
+
+    // Add to daily readings history
+    storage.dailyReadings.push({
+      date: new Date(),
+      reading: reading,
+      recordedBy: userId,
+      notes: notes || ''
+    });
+
+    await storage.save();
+
+    res.json({
+      success: true,
+      message: 'Daily reading updated successfully',
+      data: storage
+    });
+  } catch (error) {
+    console.error('Error updating daily reading:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update daily reading',
+      error: error.message
+    });
+  }
+});
+
+// Transfer fuel from main to sub storage
+router.post('/transfer/main-to-sub', authenticateToken, requirePermission('fuel_management'), async (req, res) => {
+  try {
+    const { subStorageId, amount, notes } = req.body;
+    const userId = req.user.id;
+
+    if (!subStorageId || !amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sub storage ID and valid amount are required'
+      });
+    }
+
+    // Get main storage
+    const mainStorage = await FuelStorage.findOne({ storageType: 'main' });
+    if (!mainStorage) {
+      return res.status(404).json({
+        success: false,
+        message: 'Main storage not found'
+      });
+    }
+
+    // Get sub storage
+    const subStorage = await FuelStorage.findById(subStorageId);
+    if (!subStorage || subStorage.storageType !== 'sub') {
+      return res.status(404).json({
+        success: false,
+        message: 'Sub storage not found'
+      });
+    }
+
+    // Check if main storage has enough fuel
+    if (mainStorage.currentReading < amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Insufficient fuel in main storage'
+      });
+    }
+
+    // Check if sub storage has capacity
+    const availableCapacity = subStorage.capacityLiters - subStorage.currentReading;
+    if (availableCapacity < amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Sub storage does not have enough capacity'
+      });
+    }
+
+    // Update main storage
+    const mainPreviousLevel = mainStorage.currentReading;
+    mainStorage.currentReading -= amount;
+    mainStorage.lastUpdatedBy = userId;
+
+    // Update sub storage
+    const subPreviousLevel = subStorage.currentReading;
+    subStorage.currentReading += amount;
+    subStorage.lastUpdatedBy = userId;
+
+    // Add to restock history for sub storage
+    subStorage.restockHistory.push({
+      date: new Date(),
+      amount: amount,
+      previousLevel: subPreviousLevel,
+      newLevel: subStorage.currentReading,
+      restockedBy: userId,
+      notes: notes || `Transferred from main storage`
+    });
+
+    await Promise.all([mainStorage.save(), subStorage.save()]);
+
+    res.json({
+      success: true,
+      message: 'Fuel transferred successfully',
+      data: {
+        mainStorage: {
+          id: mainStorage._id,
+          previousLevel: mainPreviousLevel,
+          currentLevel: mainStorage.currentReading
+        },
+        subStorage: {
+          id: subStorage._id,
+          previousLevel: subPreviousLevel,
+          currentLevel: subStorage.currentReading
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error transferring fuel:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to transfer fuel',
       error: error.message
     });
   }

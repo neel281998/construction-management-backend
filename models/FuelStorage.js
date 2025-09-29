@@ -22,33 +22,55 @@ const fuelStorageSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
-  currentReading: {
-    type: Number,
-    required: true,
-    min: 0,
-    default: 0
-  },
   initialReading: {
     type: Number,
     required: true,
     min: 0,
     default: 0
   },
+  currentReading: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: 0
+  },
+  todayReading: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  lastReadingDate: {
+    type: Date,
+    default: Date.now
+  },
   status: {
     type: String,
     enum: ['active', 'inactive', 'maintenance'],
     default: 'active'
   },
-  isMainStorage: {
-    type: Boolean,
-    default: false
+  storageType: {
+    type: String,
+    enum: ['main', 'sub'],
+    required: true
+  },
+  parentStorageId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'FuelStorage',
+    required: function() {
+      return this.storageType === 'sub';
+    }
   },
   siteId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Site',
     required: function() {
-      return !this.isMainStorage;
+      return this.storageType === 'sub';
     }
+  },
+  manager: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -58,7 +80,48 @@ const fuelStorageSchema = new mongoose.Schema({
   lastUpdatedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
-  }
+  },
+  restockHistory: [{
+    date: {
+      type: Date,
+      default: Date.now
+    },
+    amount: {
+      type: Number,
+      required: true
+    },
+    previousLevel: {
+      type: Number,
+      required: true
+    },
+    newLevel: {
+      type: Number,
+      required: true
+    },
+    restockedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    notes: String
+  }],
+  dailyReadings: [{
+    date: {
+      type: Date,
+      required: true
+    },
+    reading: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    recordedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    notes: String
+  }]
 }, {
   timestamps: true
 });
@@ -76,6 +139,8 @@ fuelStorageSchema.virtual('utilizationPercentage').get(function() {
 // Index for efficient queries
 fuelStorageSchema.index({ siteId: 1, status: 1 });
 fuelStorageSchema.index({ fuelType: 1, status: 1 });
-fuelStorageSchema.index({ isMainStorage: 1 });
+fuelStorageSchema.index({ storageType: 1 });
+fuelStorageSchema.index({ parentStorageId: 1 });
+fuelStorageSchema.index({ manager: 1 });
 
 module.exports = mongoose.model('FuelStorage', fuelStorageSchema);

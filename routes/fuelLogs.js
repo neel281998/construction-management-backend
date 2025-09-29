@@ -365,4 +365,171 @@ router.get('/reports/efficiency', authenticateToken, async (req, res) => {
   }
 });
 
+// Refuel vehicle from sub storage
+router.post('/refuel-vehicle', authenticateToken, requirePermission('fuel_management'), async (req, res) => {
+  try {
+    const { 
+      vehicleId, 
+      subStorageId, 
+      fuelAmount, 
+      odometerReading, 
+      notes 
+    } = req.body;
+    const userId = req.user.id;
+
+    if (!vehicleId || !subStorageId || !fuelAmount || fuelAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle ID, sub storage ID, and valid fuel amount are required'
+      });
+    }
+
+    // Get sub storage
+    const subStorage = await FuelStorage.findById(subStorageId);
+    if (!subStorage || subStorage.storageType !== 'sub') {
+      return res.status(404).json({
+        success: false,
+        message: 'Sub storage not found'
+      });
+    }
+
+    // Check if sub storage has enough fuel
+    if (subStorage.currentReading < fuelAmount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Insufficient fuel in sub storage'
+      });
+    }
+
+    // Get vehicle (assuming Vehicle model exists)
+    const Vehicle = require('../models/Vehicle');
+    const vehicle = await Vehicle.findById(vehicleId);
+    if (!vehicle) {
+      return res.status(404).json({
+        success: false,
+        message: 'Vehicle not found'
+      });
+    }
+
+    // Create fuel log
+    const fuelLog = new FuelLog({
+      vehicleId: vehicleId,
+      storageId: subStorageId,
+      fuelType: subStorage.fuelType,
+      fuelAmount: fuelAmount,
+      fuelDate: new Date(),
+      odometerReading: odometerReading || 0,
+      filledBy: userId,
+      status: 'completed',
+      notes: notes || `Refueled from ${subStorage.name}`,
+      refuelLocation: subStorage.location
+    });
+
+    await fuelLog.save();
+
+    // Update sub storage fuel level
+    subStorage.currentReading -= fuelAmount;
+    subStorage.lastUpdatedBy = userId;
+    await subStorage.save();
+
+    // Populate the response
+    await fuelLog.populate([
+      { path: 'vehicleId', select: 'vehicleNumber make model' },
+      { path: 'storageId', select: 'name location fuelType' },
+      { path: 'filledBy', select: 'firstName lastName email' }
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Vehicle refueled successfully',
+      data: fuelLog
+    });
+  } catch (error) {
+    console.error('Error refueling vehicle:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to refuel vehicle',
+      error: error.message
+    });
+  }
+});
+
+// Get fuel consumption report for vehicles
+router.get('/consumption-report', authenticateToken, async (req, res) => {
+  try {
+    const { 
+      vehicleId, 
+      startDate, 
+      endDate,
+      groupBy = 'daily' // daily, weekly, monthly
+    } = req.query;
+
+    const matchStage = { status: 'completed' };
+    if (vehicleId) matchStage.vehicleId = vehicleId;
+    
+    if (startDate || endDate) {
+      matchStage.fuelDate = {};
+      if (startDate) matchStage.fuelDate.$gte = new Date(startDate);
+      if (endDate) matchStage.fuelDate.$lte = new Date(endDate);
+    }
+
+    let groupStage;
+    switch (groupBy) {
+      case 'daily':
+        groupStage = {
+          _id: {
+            year: { $year: '$fuelDate' },
+            month: { $month: '$fuelDate' },
+            day: { $dayOfMonth: '$fuelDate' }
+          },
+          totalFuel: { $sum: '$fuelAmount' },
+          refuelCount: { $sum: 1 },
+          vehicles: { $addToSet: '$vehicleId' }
+        };
+        break;
+      case 'weekly':
+        groupStage = {
+          _id: {
+            year: { $year: '$fuelDate' },
+            week: { $week: '$fuelDate' }
+          },
+          totalFuel: { $sum: '$fuelAmount' },
+          refuelCount: { $sum: 1 },
+          vehicles: { $addToSet: '$vehicleId' }
+        };
+        break;
+      case 'monthly':
+        groupStage = {
+          _id: {
+            year: { $year: '$fuelDate' },
+            month: { $month: '$fuelDate' }
+          },
+          totalFuel: { $sum: '$fuelAmount' },
+          refuelCount: { $sum: 1 },
+          vehicles: { $addToSet: '$vehicleId' }
+        };
+        break;
+    }
+
+    const report = await FuelLog.aggregate([
+      { $match: matchStage },
+      { $group: groupStage },
+      { $sort: { '_id.year': -1, '_id.month': -1, '_id.day': -1 } }
+    ]);
+
+    res.json({
+      success: true,
+      data: report,
+      groupBy: groupBy
+    });
+  } catch (error) {
+    console.error('Error generating consumption report:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate consumption report',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
