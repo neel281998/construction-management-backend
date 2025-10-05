@@ -132,7 +132,39 @@ router.get('/:id', authenticateToken, requirePermission('storage_site.read'), as
 // Create new storage site
 router.post('/', authenticateToken, requirePermission('storage_site.create'), async (req, res) => {
   try {
-    const storageSite = new StorageSite(req.body);
+    // Generate code if not provided or if provided code doesn't match format
+    let code = req.body.code;
+    
+    if (!code || !/^[A-Z]{2,4}-\d{3}$/.test(code)) {
+      // Generate a new code based on the first 2-4 characters of the name
+      const namePrefix = req.body.name
+        .replace(/[^A-Za-z]/g, '') // Remove non-alphabetic characters
+        .substring(0, 4)
+        .toUpperCase();
+      
+      // Find the next available number for this prefix
+      const existingCodes = await StorageSite.find({
+        code: { $regex: `^${namePrefix}-\\d{3}$` }
+      }).select('code');
+      
+      let nextNumber = 1;
+      if (existingCodes.length > 0) {
+        const numbers = existingCodes
+          .map(site => parseInt(site.code.split('-')[1]))
+          .sort((a, b) => b - a);
+        nextNumber = numbers[0] + 1;
+      }
+      
+      code = `${namePrefix}-${nextNumber.toString().padStart(3, '0')}`;
+    }
+    
+    // Create storage site with generated or validated code
+    const storageSiteData = {
+      ...req.body,
+      code: code
+    };
+    
+    const storageSite = new StorageSite(storageSiteData);
     await storageSite.save();
     
     res.status(201).json({

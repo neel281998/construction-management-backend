@@ -193,9 +193,9 @@ router.post('/dispatch', authenticateToken, requirePermission('inventory.update'
       vehicle: {
         _id: vehicle._id,
         vehicleNumber: vehicle.vehicleNumber,
-        vehicleType: vehicle.vehicleType,
-        driverName: vehicle.driverName,
-        driverPhone: vehicle.driverPhone
+        vehicleType: vehicle.type,
+        driverName: vehicle.assignedTo ? 'Assigned Driver' : undefined,
+        driverPhone: undefined
       },
       dispatchedBy: {
         _id: req.user._id,

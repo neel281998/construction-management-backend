@@ -175,6 +175,21 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
       });
     }
     
+    // Validate vehicle has required fields
+    if (!vehicle.type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle type is required but not set'
+      });
+    }
+    
+    if (!vehicle.vehicleNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle number is required but not set'
+      });
+    }
+    
     // Create dispatch record
     const dispatch = new PlantOutputDispatch({
       outputId,
@@ -196,9 +211,9 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
       vehicle: {
         _id: vehicle._id,
         vehicleNumber: vehicle.vehicleNumber,
-        vehicleType: vehicle.vehicleType,
-        driverName: vehicle.driverName,
-        driverPhone: vehicle.driverPhone
+        vehicleType: vehicle.type,
+        driverName: vehicle.assignedTo ? 'Assigned Driver' : undefined,
+        driverPhone: undefined
       },
       dispatchedBy: {
         _id: req.user._id,
@@ -268,9 +283,28 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
       });
     }
     
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const errors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors
+      });
+    }
+    
+    // Handle duplicate key errors
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Duplicate dispatch record'
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      message: 'Failed to dispatch plant output'
+      message: 'Failed to dispatch plant output',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
