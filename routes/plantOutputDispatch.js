@@ -6,6 +6,7 @@ const Plant = require('../models/Plant');
 const Vehicle = require('../models/Vehicle');
 const Site = require('../models/Site');
 const StorageSite = require('../models/StorageSite');
+const StepInventoryReceipt = require('../models/StepInventoryReceipt');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
@@ -236,6 +237,37 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
     }
 
     await dispatch.save();
+    
+    // Create step inventory receipt if dispatching to a construction step
+    if (destinationType === 'construction_step') {
+      try {
+        const stepInventoryReceipt = new StepInventoryReceipt({
+          stepId: destinationId,
+          siteId: destinationDetails.siteId, // Use siteId from step details
+          sourceType: 'plant',
+          sourceId: sourceOutput.plant._id,
+          sourceName: sourceOutput.plant.name,
+          materialName: sourceOutput.materialName,
+          materialCategory: 'cement_concrete', // Default category for plant output
+          materialType: 'primary',
+          quantity: quantity,
+          unit: sourceOutput.unit,
+          qualityGrade: sourceOutput.qualitySpecs?.strength ? `${sourceOutput.qualitySpecs.strength} MPa` : undefined,
+          deliveryDate: new Date(),
+          deliveryImages: deliveryImages || [],
+          deliveryNotes: notes,
+          verifiedBy: req.user._id,
+          verificationDate: new Date(),
+          verificationNotes: `Dispatched from plant: ${sourceOutput.plant.name}`,
+          status: 'received'
+        });
+        
+        await stepInventoryReceipt.save();
+      } catch (stepReceiptError) {
+        console.error('Error creating step inventory receipt:', stepReceiptError);
+        // Don't fail the dispatch if step receipt creation fails
+      }
+    }
     
     // Reduce stock from source plant output
     sourceOutput.currentStock -= quantity;
