@@ -13,12 +13,29 @@ router.get('/receipts/step/:stepId', authenticateToken, requirePermission('site.
       stepId: req.params.stepId,
       status: { $ne: 'rejected' }
     })
-    .populate('verifiedBy', 'firstName lastName')
+    .populate('verifiedBy', 'firstName lastName email')
     .sort({ deliveryDate: -1 });
+    
+    // Ensure all receipts have receivedBy field for mobile app compatibility
+    const processedReceipts = receipts.map(receipt => {
+      const receiptObj = receipt.toObject();
+      
+      // If receivedBy is missing, create it from verifiedBy or use defaults
+      if (!receiptObj.receivedBy) {
+        receiptObj.receivedBy = {
+          _id: receiptObj.verifiedBy?._id || null,
+          firstName: receiptObj.verifiedBy?.firstName || 'Unknown',
+          lastName: receiptObj.verifiedBy?.lastName || 'User',
+          email: receiptObj.verifiedBy?.email || 'unknown@example.com'
+        };
+      }
+      
+      return receiptObj;
+    });
     
     res.json({
       success: true,
-      data: { receipts }
+      data: { receipts: processedReceipts }
     });
   } catch (error) {
     console.error('Get step inventory receipts error:', error);
