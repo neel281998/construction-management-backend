@@ -241,10 +241,20 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
     sourceOutput.currentStock -= quantity;
     
     // Add to transfer history
+    // Map destination type to valid enum value
+    let transferredToType;
+    if (destinationType === 'construction_site') {
+      transferredToType = 'Site';
+    } else if (destinationType === 'construction_step') {
+      transferredToType = 'Site'; // Construction steps belong to sites
+    } else {
+      transferredToType = 'Site'; // Default fallback
+    }
+    
     sourceOutput.transferHistory.push({
       quantity,
       transferredTo: destinationId,
-      transferredToType: destinationType,
+      transferredToType: transferredToType,
       transferredBy: req.user._id,
       transferId: dispatch._id,
       notes: `Dispatched to ${destinationName}: ${notes}`
