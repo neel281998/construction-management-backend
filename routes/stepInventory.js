@@ -176,6 +176,135 @@ router.patch('/receipts/:receiptId/quantity', authenticateToken, requirePermissi
   }
 });
 
+// Update received details by step manager (with images and detailed notes)
+router.patch('/receipts/:receiptId/received-details', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { 
+      receivedQuantity, 
+      receivedImages, 
+      receivedNotes, 
+      qualityCheck,
+      discrepancies,
+      actualDeliveryDate
+    } = req.body;
+    
+    if (!receivedQuantity || receivedQuantity < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid received quantity is required'
+      });
+    }
+    
+    const receipt = await StepInventoryReceipt.findById(req.params.receiptId);
+    
+    if (!receipt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Receipt not found'
+      });
+    }
+    
+    // Store original values for comparison
+    const originalQuantity = receipt.quantity;
+    const originalDeliveryDate = receipt.deliveryDate;
+    
+    // Update the received quantity
+    receipt.quantity = receivedQuantity;
+    receipt.remainingQuantity = receivedQuantity - receipt.consumedQuantity;
+    
+    // Update delivery images with received images
+    if (receivedImages && receivedImages.length > 0) {
+      receipt.deliveryImages = [...(receipt.deliveryImages || []), ...receivedImages];
+    }
+    
+    // Update delivery notes with received notes
+    if (receivedNotes) {
+      receipt.deliveryNotes = receivedNotes;
+    }
+    
+    // Update delivery date if different
+    if (actualDeliveryDate) {
+      receipt.deliveryDate = new Date(actualDeliveryDate);
+    }
+    
+    // Add quality check information
+    if (qualityCheck) {
+      receipt.qualityCheck = {
+        performed: qualityCheck.performed || false,
+        passed: qualityCheck.passed || false,
+        testResults: qualityCheck.testResults || [],
+        checkedBy: req.user._id,
+        checkedAt: new Date()
+      };
+    }
+    
+    // Add discrepancy information
+    if (discrepancies) {
+      receipt.discrepancies = {
+        quantityDifference: receivedQuantity - originalQuantity,
+        qualityIssues: discrepancies.qualityIssues || [],
+        damageReport: discrepancies.damageReport || null,
+        otherIssues: discrepancies.otherIssues || null,
+        reportedBy: req.user._id,
+        reportedAt: new Date()
+      };
+    }
+    
+    // Update verification info
+    receipt.verifiedBy = req.user._id;
+    receipt.verificationDate = new Date();
+    receipt.status = 'verified';
+    
+    // Create comprehensive verification notes
+    let verificationNotes = `Received quantity updated by step manager.\n`;
+    verificationNotes += `Original: ${originalQuantity} ${receipt.unit}\n`;
+    verificationNotes += `Received: ${receivedQuantity} ${receipt.unit}\n`;
+    verificationNotes += `Difference: ${receivedQuantity - originalQuantity} ${receipt.unit}\n`;
+    
+    if (receivedNotes) {
+      verificationNotes += `\nStep Manager Notes: ${receivedNotes}\n`;
+    }
+    
+    if (discrepancies && discrepancies.quantityDifference !== 0) {
+      verificationNotes += `\nDiscrepancy: ${discrepancies.quantityDifference} ${receipt.unit}\n`;
+    }
+    
+    receipt.verificationNotes = verificationNotes;
+    
+    await receipt.save();
+    
+    res.json({
+      success: true,
+      message: 'Received details updated successfully',
+      data: {
+        receipt: {
+          id: receipt._id,
+          originalQuantity,
+          receivedQuantity,
+          difference: receivedQuantity - originalQuantity,
+          status: receipt.status,
+          verifiedBy: {
+            firstName: req.user.firstName,
+            lastName: req.user.lastName
+          },
+          verifiedAt: receipt.verificationDate,
+          images: receipt.deliveryImages,
+          notes: receipt.deliveryNotes,
+          qualityCheck: receipt.qualityCheck,
+          discrepancies: receipt.discrepancies
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update received details error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update received details'
+    });
+  }
+});
+
 // Verify receipt by step manager
 router.patch('/receipts/:receiptId/verify', authenticateToken, requirePermission('site.update'), async (req, res) => {
   try {

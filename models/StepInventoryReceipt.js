@@ -114,6 +114,59 @@ const stepInventoryReceiptSchema = new mongoose.Schema({
     enum: ['received', 'verified', 'rejected'],
     default: 'received'
   },
+  // Quality check information
+  qualityCheck: {
+    performed: {
+      type: Boolean,
+      default: false
+    },
+    passed: {
+      type: Boolean,
+      default: false
+    },
+    testResults: [{
+      testName: String,
+      result: String,
+      value: String,
+      passed: Boolean
+    }],
+    checkedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    checkedAt: {
+      type: Date
+    }
+  },
+  // Discrepancy information
+  discrepancies: {
+    quantityDifference: {
+      type: Number,
+      default: 0
+    },
+    qualityIssues: [{
+      issue: String,
+      severity: {
+        type: String,
+        enum: ['low', 'medium', 'high', 'critical'],
+        default: 'medium'
+      },
+      description: String
+    }],
+    damageReport: {
+      type: String
+    },
+    otherIssues: {
+      type: String
+    },
+    reportedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    reportedAt: {
+      type: Date
+    }
+  },
   // Consumption tracking
   consumedQuantity: {
     type: Number,
