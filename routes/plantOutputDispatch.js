@@ -241,6 +241,17 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
     // Create step inventory receipt if dispatching to a construction step
     if (destinationType === 'construction_step') {
       try {
+        // Map plant output units to step inventory units
+        const unitMapping = {
+          'cubic_meters': 'm³',
+          'tons': 'tons',
+          'pieces': 'pieces',
+          'kg': 'kg',
+          'liters': 'liters'
+        };
+        
+        const mappedUnit = unitMapping[sourceOutput.unit] || 'm³'; // Default to m³ if no mapping found
+        
         const stepInventoryReceipt = new StepInventoryReceipt({
           stepId: destinationId,
           siteId: destinationDetails.siteId, // Use siteId from step details
@@ -251,7 +262,7 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
           materialCategory: 'cement_concrete', // Default category for plant output
           materialType: 'primary',
           quantity: quantity,
-          unit: sourceOutput.unit,
+          unit: mappedUnit,
           qualityGrade: sourceOutput.qualitySpecs?.strength ? `${sourceOutput.qualitySpecs.strength} MPa` : undefined,
           deliveryDate: new Date(),
           deliveryImages: deliveryImages || [],
