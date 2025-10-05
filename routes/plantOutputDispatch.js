@@ -668,6 +668,59 @@ router.get('/pending/:destinationType/:destinationId', authenticateToken, requir
   }
 });
 
+// Get all dispatches for a destination (including received ones)
+router.get('/destination/:destinationType/:destinationId', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+  try {
+    const { destinationType, destinationId } = req.params;
+    const { page = 1, limit = 10, status } = req.query;
+    
+    const query = {
+      'destination.type': destinationType,
+      'destination.id': destinationId
+    };
+    
+    // Filter by status if provided
+    if (status) {
+      query.status = status;
+    }
+    
+    const dispatches = await PlantOutputDispatch.find(query)
+      .sort({ dispatchedAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .populate('dispatchedBy', 'firstName lastName email')
+      .populate('fromPlant', 'name code')
+      .populate('receivedBy', 'firstName lastName email');
+    
+    const totalCount = await PlantOutputDispatch.countDocuments(query);
+    
+    res.json({
+      success: true,
+      data: {
+        destination: {
+          type: destinationType,
+          id: destinationId
+        },
+        dispatches,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalCount,
+          hasNext: parseInt(page) * parseInt(limit) < totalCount,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get destination dispatches error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch destination dispatches'
+    });
+  }
+});
+
 // Get receipt history for a dispatch
 router.get('/:dispatchId/receipts', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
   try {
@@ -690,6 +743,87 @@ router.get('/:dispatchId/receipts', authenticateToken, requirePermission('plant_
     res.status(500).json({
       success: false,
       message: 'Failed to fetch plant output receipt history'
+    });
+  }
+});
+
+// Get receipts for a specific destination (construction site or step)
+router.get('/receipts/destination/:destinationType/:destinationId', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+  try {
+    const { destinationType, destinationId } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+    
+    // Find dispatches for this destination
+    const dispatches = await PlantOutputDispatch.find({
+      'destination.type': destinationType,
+      'destination.id': destinationId
+    }).select('_id');
+    
+    const dispatchIds = dispatches.map(d => d._id);
+    
+    if (dispatchIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          destination: {
+            type: destinationType,
+            id: destinationId
+          },
+          receipts: [],
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages: 0,
+            totalCount: 0,
+            hasNext: false,
+            hasPrev: false
+          }
+        }
+      });
+    }
+    
+    // Get receipts for these dispatches
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    const [receipts, totalCount] = await Promise.all([
+      PlantOutputReceipt.find({ dispatchId: { $in: dispatchIds } })
+        .sort({ receivedAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .populate('receivedBy', 'firstName lastName email')
+        .populate({
+          path: 'dispatchId',
+          select: 'outputName quantity destination vehicle dispatchedAt',
+          populate: {
+            path: 'dispatchedBy',
+            select: 'firstName lastName email'
+          }
+        }),
+      PlantOutputReceipt.countDocuments({ dispatchId: { $in: dispatchIds } })
+    ]);
+    
+    res.json({
+      success: true,
+      data: {
+        destination: {
+          type: destinationType,
+          id: destinationId
+        },
+        receipts,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(totalCount / parseInt(limit)),
+          totalCount,
+          hasNext: skip + receipts.length < totalCount,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get destination receipts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch destination receipts'
     });
   }
 });
