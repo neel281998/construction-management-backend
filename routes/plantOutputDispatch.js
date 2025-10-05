@@ -878,4 +878,217 @@ router.get('/receipts/destination/:destinationType/:destinationId', authenticate
   }
 });
 
+// Confirm receipt for plant output dispatch to construction step
+router.post('/confirm-receipt/:dispatchId', authenticateToken, requirePermission('plant_output.update'), async (req, res) => {
+  try {
+    const { dispatchId } = req.params;
+    const { 
+      receivedQuantity, 
+      receiptImages = [], 
+      notes = '',
+      qualityCheck = {},
+      discrepancies = {}
+    } = req.body;
+    
+    if (!receivedQuantity || receivedQuantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid received quantity is required'
+      });
+    }
+    
+    // Get the dispatch record
+    const dispatch = await PlantOutputDispatch.findById(dispatchId)
+      .populate('outputId', 'materialName materialType unit plant');
+    
+    if (!dispatch) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dispatch record not found'
+      });
+    }
+    
+    if (dispatch.destination.type !== 'construction_step') {
+      return res.status(400).json({
+        success: false,
+        message: 'This endpoint is only for construction step dispatches'
+      });
+    }
+    
+    if (dispatch.status === 'received') {
+      return res.status(400).json({
+        success: false,
+        message: 'This dispatch has already been received'
+      });
+    }
+    
+    if (dispatch.status === 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot confirm a cancelled dispatch'
+      });
+    }
+    
+    // Check if received quantity exceeds dispatched quantity
+    if (receivedQuantity > dispatch.quantity) {
+      return res.status(400).json({
+        success: false,
+        message: `Received quantity (${receivedQuantity}) cannot exceed dispatched quantity (${dispatch.quantity})`
+      });
+    }
+    
+    // Create plant output receipt
+    const plantReceipt = new PlantOutputReceipt({
+      dispatchId: dispatch._id,
+      receivedQuantity: receivedQuantity,
+      receivedBy: {
+        _id: req.user._id,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        email: req.user.email
+      },
+      deliveryImages: receiptImages.map(fileId => ({
+        fileId,
+        uploadedBy: req.user._id,
+        uploadedAt: new Date()
+      })),
+      notes,
+      qualityCheck: {
+        performed: qualityCheck.performed || false,
+        passed: qualityCheck.passed,
+        testResults: qualityCheck.testResults || [],
+        checkedBy: qualityCheck.performed ? req.user._id : undefined,
+        checkedAt: qualityCheck.performed ? new Date() : undefined
+      }
+    });
+    
+    await plantReceipt.save();
+    
+    // Update dispatch record
+    dispatch.receivedQuantity = receivedQuantity;
+    dispatch.remainingQuantity = dispatch.quantity - receivedQuantity;
+    dispatch.status = 'received';
+    dispatch.receivedAt = new Date();
+    dispatch.receivedBy = {
+      _id: req.user._id,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      email: req.user.email
+    };
+    
+    await dispatch.save();
+    
+    // Update the corresponding step inventory receipt
+    const stepReceipt = await StepInventoryReceipt.findOne({
+      stepId: dispatch.destination.id,
+      sourceType: 'plant',
+      sourceId: dispatch.fromPlant._id,
+      materialName: dispatch.outputName
+    }).sort({ createdAt: -1 }); // Get the most recent one
+    
+    if (stepReceipt) {
+      // Update the step inventory receipt with confirmed details
+      stepReceipt.quantity = receivedQuantity;
+      stepReceipt.remainingQuantity = receivedQuantity - stepReceipt.consumedQuantity;
+      
+      // Add received images
+      if (receiptImages && receiptImages.length > 0) {
+        stepReceipt.deliveryImages = [...(stepReceipt.deliveryImages || []), ...receiptImages];
+      }
+      
+      // Update delivery notes
+      if (notes) {
+        stepReceipt.deliveryNotes = notes;
+      }
+      
+      // Add quality check information
+      if (qualityCheck && qualityCheck.performed) {
+        stepReceipt.qualityCheck = {
+          performed: qualityCheck.performed,
+          passed: qualityCheck.passed,
+          testResults: qualityCheck.testResults || [],
+          checkedBy: req.user._id,
+          checkedAt: new Date()
+        };
+      }
+      
+      // Add discrepancy information
+      if (discrepancies && Object.keys(discrepancies).length > 0) {
+        stepReceipt.discrepancies = {
+          quantityDifference: receivedQuantity - dispatch.quantity,
+          qualityIssues: discrepancies.qualityIssues || [],
+          damageReport: discrepancies.damageReport || null,
+          otherIssues: discrepancies.otherIssues || null,
+          reportedBy: req.user._id,
+          reportedAt: new Date()
+        };
+      }
+      
+      // Update verification info
+      stepReceipt.verifiedBy = req.user._id;
+      stepReceipt.verificationDate = new Date();
+      stepReceipt.status = 'verified';
+      
+      // Create comprehensive verification notes
+      let verificationNotes = `Receipt confirmed by step manager.\n`;
+      verificationNotes += `Dispatched: ${dispatch.quantity} ${dispatch.unit}\n`;
+      verificationNotes += `Received: ${receivedQuantity} ${dispatch.unit}\n`;
+      verificationNotes += `Difference: ${receivedQuantity - dispatch.quantity} ${dispatch.unit}\n`;
+      
+      if (notes) {
+        verificationNotes += `\nStep Manager Notes: ${notes}\n`;
+      }
+      
+      if (discrepancies && discrepancies.quantityDifference !== 0) {
+        verificationNotes += `\nDiscrepancy: ${discrepancies.quantityDifference} ${dispatch.unit}\n`;
+      }
+      
+      stepReceipt.verificationNotes = verificationNotes;
+      
+      await stepReceipt.save();
+    }
+    
+    res.json({
+      success: true,
+      message: 'Receipt confirmed successfully',
+      data: {
+        dispatch: {
+          id: dispatch._id,
+          outputName: dispatch.outputName,
+          dispatchedQuantity: dispatch.quantity,
+          receivedQuantity: receivedQuantity,
+          difference: receivedQuantity - dispatch.quantity,
+          destination: dispatch.destination.name,
+          status: dispatch.status,
+          confirmedBy: {
+            firstName: req.user.firstName,
+            lastName: req.user.lastName
+          },
+          confirmedAt: dispatch.receivedAt
+        },
+        plantReceipt: {
+          id: plantReceipt._id,
+          receivedQuantity: plantReceipt.receivedQuantity,
+          receivedBy: plantReceipt.receivedBy,
+          receivedAt: plantReceipt.receivedAt
+        },
+        stepReceipt: stepReceipt ? {
+          id: stepReceipt._id,
+          quantity: stepReceipt.quantity,
+          status: stepReceipt.status,
+          verifiedBy: stepReceipt.verifiedBy,
+          verifiedAt: stepReceipt.verificationDate
+        } : null
+      }
+    });
+    
+  } catch (error) {
+    console.error('Confirm plant output receipt error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to confirm receipt'
+    });
+  }
+});
+
 module.exports = router;
