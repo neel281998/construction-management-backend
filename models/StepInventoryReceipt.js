@@ -71,6 +71,30 @@ const stepInventoryReceiptSchema = new mongoose.Schema({
   deliveryNotes: {
     type: String
   },
+  // Received by information
+  receivedBy: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    firstName: {
+      type: String,
+      required: true
+    },
+    lastName: {
+      type: String,
+      required: true
+    },
+    email: {
+      type: String,
+      required: true
+    }
+  },
+  receivedAt: {
+    type: Date,
+    default: Date.now
+  },
   // Verification
   verifiedBy: {
     type: mongoose.Schema.Types.ObjectId,

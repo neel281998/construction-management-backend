@@ -267,6 +267,13 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
           deliveryDate: new Date(),
           deliveryImages: deliveryImages || [],
           deliveryNotes: notes,
+          receivedBy: {
+            _id: req.user._id,
+            firstName: req.user.firstName,
+            lastName: req.user.lastName,
+            email: req.user.email
+          },
+          receivedAt: new Date(),
           verifiedBy: req.user._id,
           verificationDate: new Date(),
           verificationNotes: `Dispatched from plant: ${sourceOutput.plant.name}`,
