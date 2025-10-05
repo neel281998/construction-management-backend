@@ -70,6 +70,163 @@ router.get('/consumption/step/:stepId', authenticateToken, requirePermission('si
   }
 });
 
+// Get receipt details by ID
+router.get('/receipts/:receiptId', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const receipt = await StepInventoryReceipt.findById(req.params.receiptId)
+      .populate('verifiedBy', 'firstName lastName email')
+      .populate('stepId', 'name stepNumber')
+      .populate('siteId', 'name code');
+    
+    if (!receipt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Receipt not found'
+      });
+    }
+    
+    // Ensure receivedBy field exists for mobile app compatibility
+    const receiptObj = receipt.toObject();
+    if (!receiptObj.receivedBy) {
+      receiptObj.receivedBy = {
+        _id: receiptObj.verifiedBy?._id || null,
+        firstName: receiptObj.verifiedBy?.firstName || 'Unknown',
+        lastName: receiptObj.verifiedBy?.lastName || 'User',
+        email: receiptObj.verifiedBy?.email || 'unknown@example.com'
+      };
+    }
+    
+    res.json({
+      success: true,
+      data: { receipt: receiptObj }
+    });
+    
+  } catch (error) {
+    console.error('Get receipt details error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch receipt details'
+    });
+  }
+});
+
+// Update received quantity by step manager
+router.patch('/receipts/:receiptId/quantity', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { receivedQuantity, notes } = req.body;
+    
+    if (!receivedQuantity || receivedQuantity < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid received quantity is required'
+      });
+    }
+    
+    const receipt = await StepInventoryReceipt.findById(req.params.receiptId);
+    
+    if (!receipt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Receipt not found'
+      });
+    }
+    
+    // Update the received quantity
+    const originalQuantity = receipt.quantity;
+    receipt.quantity = receivedQuantity;
+    receipt.remainingQuantity = receivedQuantity - receipt.consumedQuantity;
+    
+    // Add verification notes
+    if (notes) {
+      receipt.verificationNotes = notes;
+    }
+    
+    // Update verification info
+    receipt.verifiedBy = req.user._id;
+    receipt.verificationDate = new Date();
+    receipt.status = 'verified';
+    
+    await receipt.save();
+    
+    res.json({
+      success: true,
+      message: 'Received quantity updated successfully',
+      data: {
+        receipt: {
+          id: receipt._id,
+          originalQuantity,
+          receivedQuantity,
+          difference: receivedQuantity - originalQuantity,
+          status: receipt.status,
+          verifiedBy: {
+            firstName: req.user.firstName,
+            lastName: req.user.lastName
+          },
+          verifiedAt: receipt.verificationDate
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update received quantity error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update received quantity'
+    });
+  }
+});
+
+// Verify receipt by step manager
+router.patch('/receipts/:receiptId/verify', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { verified, notes } = req.body;
+    
+    const receipt = await StepInventoryReceipt.findById(req.params.receiptId);
+    
+    if (!receipt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Receipt not found'
+      });
+    }
+    
+    // Update verification status
+    receipt.status = verified ? 'verified' : 'rejected';
+    receipt.verifiedBy = req.user._id;
+    receipt.verificationDate = new Date();
+    
+    if (notes) {
+      receipt.verificationNotes = notes;
+    }
+    
+    await receipt.save();
+    
+    res.json({
+      success: true,
+      message: `Receipt ${verified ? 'verified' : 'rejected'} successfully`,
+      data: {
+        receipt: {
+          id: receipt._id,
+          status: receipt.status,
+          verifiedBy: {
+            firstName: req.user.firstName,
+            lastName: req.user.lastName
+          },
+          verifiedAt: receipt.verificationDate,
+          notes: receipt.verificationNotes
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Verify receipt error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify receipt'
+    });
+  }
+});
+
 // Get inventory summary for a step
 router.get('/summary/step/:stepId', authenticateToken, requirePermission('site.read'), async (req, res) => {
   try {
