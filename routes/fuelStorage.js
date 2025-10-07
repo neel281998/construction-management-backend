@@ -82,6 +82,17 @@ router.post('/', authenticateToken, async (req, res) => {
       lastUpdatedBy: req.user._id
     };
 
+    // Enforce single main storage
+    if (storageData.storageType === 'main') {
+      const existingMain = await FuelStorage.findOne({ storageType: 'main' });
+      if (existingMain) {
+        return res.status(400).json({
+          success: false,
+          message: 'Only one main fuel storage is allowed. Update the existing main storage instead.'
+        });
+      }
+    }
+
     const storage = new FuelStorage(storageData);
     await storage.save();
 
