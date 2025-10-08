@@ -164,12 +164,29 @@ app.use('/api/fuel/logs', fuelLogRoutes);
 app.use('/api/vehicle-analytics', vehicleAnalyticsRoutes);
 app.use('/api/vehicle-maintenance', vehicleMaintenanceRoutes);
 
-// Health check endpoint
+// Health check endpoint - Updated to include database status
 app.get('/api/health', (req, res) => {
+  const connectionStates = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  const dbState = mongoose.connection.readyState;
+  const isHealthy = dbState === 1;
+  
   res.json({ 
-    status: 'OK', 
+    status: isHealthy ? 'OK' : 'DEGRADED',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    database: {
+      state: connectionStates[dbState],
+      readyState: dbState,
+      host: mongoose.connection.host,
+      port: mongoose.connection.port,
+      name: mongoose.connection.name
+    }
   });
 });
 
