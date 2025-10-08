@@ -34,6 +34,8 @@ const recentActivitiesRoutes = require('./routes/recentActivities');
 const fuelStorageRoutes = require('./routes/fuelStorage');
 const fuelTransferRoutes = require('./routes/fuelTransfers');
 const fuelLogRoutes = require('./routes/fuelLogs');
+const vehicleAnalyticsRoutes = require('./routes/vehicleAnalytics');
+const vehicleMaintenanceRoutes = require('./routes/vehicleMaintenance');
 const { initializeCronJobs } = require('./utils/cronJobs');
  
 // Load environment variables
@@ -159,6 +161,8 @@ app.use('/api/recent-activities', recentActivitiesRoutes);
 app.use('/api/fuel/storages', fuelStorageRoutes);
 app.use('/api/fuel/transfers', fuelTransferRoutes);
 app.use('/api/fuel/logs', fuelLogRoutes);
+app.use('/api/vehicle-analytics', vehicleAnalyticsRoutes);
+app.use('/api/vehicle-maintenance', vehicleMaintenanceRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

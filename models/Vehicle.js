@@ -5,9 +5,7 @@ const vehicleSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Vehicle number is required'],
     unique: true,
-    trim: true,
-    uppercase: true,
-    match: [/^[A-Z]{2}-\d{3}$/, 'Vehicle number must be in format XX-000']
+    trim: true
   },
   type: {
     type: String,
