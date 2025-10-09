@@ -34,6 +34,7 @@ const recentActivitiesRoutes = require('./routes/recentActivities');
 const fuelStorageRoutes = require('./routes/fuelStorage');
 const fuelTransferRoutes = require('./routes/fuelTransfers');
 const fuelLogRoutes = require('./routes/fuelLogs');
+const fuelManagementRoutes = require('./routes/fuelManagement');
 const vehicleAnalyticsRoutes = require('./routes/vehicleAnalytics');
 const vehicleMaintenanceRoutes = require('./routes/vehicleMaintenance');
 const { initializeCronJobs } = require('./utils/cronJobs');
@@ -126,7 +127,8 @@ app.get('/', (req, res) => {
       tripReports: '/api/trip-reports',
       alerts: '/api/alerts',
       notifications: '/api/notifications',
-      recentActivities: '/api/recent-activities'
+      recentActivities: '/api/recent-activities',
+      fuelManagement: '/api/fuel'
     }
   });
 });
@@ -161,6 +163,7 @@ app.use('/api/recent-activities', recentActivitiesRoutes);
 app.use('/api/fuel/storages', fuelStorageRoutes);
 app.use('/api/fuel/transfers', fuelTransferRoutes);
 app.use('/api/fuel/logs', fuelLogRoutes);
+app.use('/api/fuel', fuelManagementRoutes);
 app.use('/api/vehicle-analytics', vehicleAnalyticsRoutes);
 app.use('/api/vehicle-maintenance', vehicleMaintenanceRoutes);
 

@@ -1,3 +1,4 @@
+
 const ActivityLog = require('../models/ActivityLog');
 
 /**
@@ -126,6 +127,16 @@ function getActivityStyle(action) {
     // Fuel activities
     fuel_log_created: { icon: 'water', color: 'blue' },
     fuel_transfer_created: { icon: 'swap-horizontal', color: 'blue' },
+    vehicle_refueled: { icon: 'car', color: 'blue' },
+    fuel_main_storage_created: { icon: 'cube', color: 'green' },
+    fuel_main_storage_updated: { icon: 'cube-outline', color: 'blue' },
+    fuel_main_storage_deleted: { icon: 'trash', color: 'red' },
+    fuel_main_storage_restocked: { icon: 'add-circle', color: 'green' },
+    fuel_sub_pump_created: { icon: 'water', color: 'green' },
+    fuel_sub_pump_updated: { icon: 'water-outline', color: 'blue' },
+    fuel_sub_pump_deleted: { icon: 'trash', color: 'red' },
+    fuel_sub_pump_restocked: { icon: 'add-circle', color: 'green' },
+    fuel_daily_reading_recorded: { icon: 'document-text', color: 'blue' },
     
     // Default
     default: { icon: 'information-circle', color: 'blue' }

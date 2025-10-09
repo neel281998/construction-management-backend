@@ -34,6 +34,7 @@ const recentActivitiesRoutes = require('../routes/recentActivities');
 const fuelStorageRoutes = require('../routes/fuelStorage');
 const fuelTransferRoutes = require('../routes/fuelTransfers');
 const fuelLogRoutes = require('../routes/fuelLogs');
+const fuelManagementRoutes = require('../routes/fuelManagement');
 const vehicleAnalyticsRoutes = require('../routes/vehicleAnalytics');
 const vehicleMaintenanceRoutes = require('../routes/vehicleMaintenance');
 
@@ -189,6 +190,7 @@ app.get('/', (req, res) => {
       fuelStorages: '/api/fuel/storages',
       fuelTransfers: '/api/fuel/transfers',
       fuelLogs: '/api/fuel/logs',
+      fuelManagement: '/api/fuel',
       vehicleAnalytics: '/api/vehicle-analytics',
       vehicleMaintenance: '/api/vehicle-maintenance'
     }
@@ -225,6 +227,7 @@ app.use('/api/recent-activities', recentActivitiesRoutes);
 app.use('/api/fuel/storages', fuelStorageRoutes);
 app.use('/api/fuel/transfers', fuelTransferRoutes);
 app.use('/api/fuel/logs', fuelLogRoutes);
+app.use('/api/fuel', fuelManagementRoutes);
 app.use('/api/vehicle-analytics', vehicleAnalyticsRoutes);
 app.use('/api/vehicle-maintenance', vehicleMaintenanceRoutes);
 

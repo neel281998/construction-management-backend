@@ -184,6 +184,7 @@ userSchema.pre('save', function(next) {
       'plant.create', 'plant.read', 'plant.update', 'plant.delete',
       'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
       'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+      'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
       'attendance.read', 'attendance.approve',
       'report.generate', 'report.export'
     ],
@@ -225,7 +226,18 @@ userSchema.pre('save', function(next) {
       'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
       'plant_output.create', 'plant_output.read', 'plant_output.update',
       'inventory.read', 'inventory.update', // Can read and update inventory for dispatch/transfer
+      'fuel.read', 'fuel.refuel', // Can read fuel data and refuel vehicles
       'report.generate' // Can generate plant reports
+    ],
+    fuel_main_manager: [
+      'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+      'vehicle.read', // Can read vehicles for refueling
+      'report.generate'
+    ],
+    fuel_sub_manager: [
+      'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+      'vehicle.read', // Can read vehicles for refueling
+      'report.generate'
     ]
   };
   

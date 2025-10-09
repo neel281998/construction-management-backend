@@ -123,3 +123,4 @@ activityLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 6
 
 module.exports = mongoose.model('ActivityLog', activityLogSchema);
 
+

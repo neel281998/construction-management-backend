@@ -259,3 +259,4 @@ await logActivity({
    - Capture IP and user agent
    - Make it available in the recent activities feed
 
+

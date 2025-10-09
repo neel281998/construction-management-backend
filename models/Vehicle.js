@@ -163,6 +163,55 @@ const vehicleSchema = new mongoose.Schema({
       ref: 'InventoryTransfer',
       default: null
     }
+  },
+  // Fuel efficiency tracking
+  fuelEfficiency: {
+    currentOdometer: {
+      type: Number,
+      default: 0
+    },
+    odometerType: {
+      type: String,
+      enum: ['km', 'hours'],
+      default: 'km'
+    },
+    latestEfficiency: {
+      type: Number,
+      default: 0
+    },
+    averageEfficiency: {
+      type: Number,
+      default: 0
+    },
+    totalFuelConsumed: {
+      type: Number,
+      default: 0
+    },
+    totalDistance: {
+      type: Number,
+      default: 0
+    },
+    lastRefuelingDate: {
+      type: Date
+    },
+    efficiencyHistory: [{
+      date: {
+        type: Date,
+        default: Date.now
+      },
+      efficiency: {
+        type: Number,
+        required: true
+      },
+      fuelQuantity: {
+        type: Number,
+        required: true
+      },
+      distance: {
+        type: Number,
+        required: true
+      }
+    }]
   }
 }, {
   timestamps: true,
