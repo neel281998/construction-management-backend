@@ -204,7 +204,15 @@ router.get('/:id', authenticateToken, requirePermission('plant_inventory.read'),
 router.post('/', authenticateToken, requirePermission('plant_inventory.create'), async (req, res) => {
   try {
     console.log('Create plant inventory request body:', req.body);
-    const { plant } = req.body;
+    const { plant, vehicle } = req.body;
+    
+    // Validate vehicle selection (mandatory)
+    if (!vehicle || !vehicle._id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle selection is required for plant inventory operations'
+      });
+    }
     
     // Check access control for non-admin users
     if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plant)) {
@@ -237,6 +245,39 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
     const item = new PlantInventory(inventoryData);
     await item.save();
     
+    // Update vehicle trip tracking if vehicle is provided
+    if (vehicle && vehicle._id) {
+      try {
+        const Vehicle = require('../models/Vehicle');
+        const vehicleDoc = await Vehicle.findById(vehicle._id);
+        
+        if (vehicleDoc) {
+          // Update trip tracking
+          const today = new Date();
+          const todayStr = today.toISOString().split('T')[0];
+          const lastTripDate = vehicleDoc.tripTracking.lastTripDate;
+          const lastTripDateStr = lastTripDate ? lastTripDate.toISOString().split('T')[0] : null;
+          
+          // If it's a new day, reset daily trips
+          if (lastTripDateStr !== todayStr) {
+            vehicleDoc.tripTracking.dailyTrips = 1;
+          } else {
+            vehicleDoc.tripTracking.dailyTrips += 1;
+          }
+          
+          vehicleDoc.tripTracking.totalTrips += 1;
+          vehicleDoc.tripTracking.lastTripDate = today;
+          
+          await vehicleDoc.save();
+          
+          console.log(`Vehicle ${vehicle.vehicleNumber} trip count updated for plant inventory creation: Daily: ${vehicleDoc.tripTracking.dailyTrips}, Total: ${vehicleDoc.tripTracking.totalTrips}`);
+        }
+      } catch (vehicleError) {
+        console.error('Error updating vehicle trip tracking for plant inventory creation:', vehicleError);
+        // Don't fail the inventory creation if vehicle update fails
+      }
+    }
+    
     // Populate plant for response
     await item.populate('plant', 'name code plantType');
     
@@ -268,12 +309,20 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
 // Restock plant inventory item
 router.post('/:id/restock', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
   try {
-    const { quantity, supplier, notes } = req.body;
+    const { quantity, supplier, notes, vehicle } = req.body;
     
     if (!quantity || quantity <= 0) {
       return res.status(400).json({
         success: false,
         message: 'Valid quantity is required'
+      });
+    }
+    
+    // Validate vehicle selection (mandatory)
+    if (!vehicle || !vehicle._id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle selection is required for plant inventory operations'
       });
     }
     
@@ -298,6 +347,39 @@ router.post('/:id/restock', authenticateToken, requirePermission('plant_inventor
     
     // Use the restock method
     await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes);
+    
+    // Update vehicle trip tracking if vehicle is provided
+    if (vehicle && vehicle._id) {
+      try {
+        const Vehicle = require('../models/Vehicle');
+        const vehicleDoc = await Vehicle.findById(vehicle._id);
+        
+        if (vehicleDoc) {
+          // Update trip tracking
+          const today = new Date();
+          const todayStr = today.toISOString().split('T')[0];
+          const lastTripDate = vehicleDoc.tripTracking.lastTripDate;
+          const lastTripDateStr = lastTripDate ? lastTripDate.toISOString().split('T')[0] : null;
+          
+          // If it's a new day, reset daily trips
+          if (lastTripDateStr !== todayStr) {
+            vehicleDoc.tripTracking.dailyTrips = 1;
+          } else {
+            vehicleDoc.tripTracking.dailyTrips += 1;
+          }
+          
+          vehicleDoc.tripTracking.totalTrips += 1;
+          vehicleDoc.tripTracking.lastTripDate = today;
+          
+          await vehicleDoc.save();
+          
+          console.log(`Vehicle ${vehicle.vehicleNumber} trip count updated for plant inventory restock: Daily: ${vehicleDoc.tripTracking.dailyTrips}, Total: ${vehicleDoc.tripTracking.totalTrips}`);
+        }
+      } catch (vehicleError) {
+        console.error('Error updating vehicle trip tracking for plant inventory restock:', vehicleError);
+        // Don't fail the restock if vehicle update fails
+      }
+    }
     
     res.json({
       success: true,
@@ -666,12 +748,20 @@ router.put('/:itemId', authenticateToken, requirePermission('plant_inventory.upd
 router.post('/:itemId/add-stock', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
   try {
     const { itemId } = req.params;
-    const { quantity, supplier, notes } = req.body;
+    const { quantity, supplier, notes, vehicle } = req.body;
     
     if (!quantity || quantity <= 0) {
       return res.status(400).json({
         success: false,
         message: 'Valid quantity is required'
+      });
+    }
+    
+    // Validate vehicle selection (mandatory)
+    if (!vehicle || !vehicle._id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vehicle selection is required for plant inventory operations'
       });
     }
     
@@ -704,6 +794,39 @@ router.post('/:itemId/add-stock', authenticateToken, requirePermission('plant_in
     item.lastRestocked = new Date();
     
     await item.save();
+    
+    // Update vehicle trip tracking if vehicle is provided
+    if (vehicle && vehicle._id) {
+      try {
+        const Vehicle = require('../models/Vehicle');
+        const vehicleDoc = await Vehicle.findById(vehicle._id);
+        
+        if (vehicleDoc) {
+          // Update trip tracking
+          const today = new Date();
+          const todayStr = today.toISOString().split('T')[0];
+          const lastTripDate = vehicleDoc.tripTracking.lastTripDate;
+          const lastTripDateStr = lastTripDate ? lastTripDate.toISOString().split('T')[0] : null;
+          
+          // If it's a new day, reset daily trips
+          if (lastTripDateStr !== todayStr) {
+            vehicleDoc.tripTracking.dailyTrips = 1;
+          } else {
+            vehicleDoc.tripTracking.dailyTrips += 1;
+          }
+          
+          vehicleDoc.tripTracking.totalTrips += 1;
+          vehicleDoc.tripTracking.lastTripDate = today;
+          
+          await vehicleDoc.save();
+          
+          console.log(`Vehicle ${vehicle.vehicleNumber} trip count updated for plant inventory add stock: Daily: ${vehicleDoc.tripTracking.dailyTrips}, Total: ${vehicleDoc.tripTracking.totalTrips}`);
+        }
+      } catch (vehicleError) {
+        console.error('Error updating vehicle trip tracking for plant inventory add stock:', vehicleError);
+        // Don't fail the add stock if vehicle update fails
+      }
+    }
     
     res.json({
       success: true,
