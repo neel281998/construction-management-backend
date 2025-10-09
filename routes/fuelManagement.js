@@ -62,7 +62,7 @@ router.post('/main-storage', authenticateToken, requirePermission('fuel.create')
   try {
     const mainStorageData = {
       ...req.body,
-      currentFuelLevel: 0,
+      currentFuelLevel: req.body.initialFuelLevel || 0,
       totalDispensed: 0,
       totalAdded: 0
     };
@@ -206,9 +206,19 @@ router.post('/main-storage/:id/restock', authenticateToken, requirePermission('f
 
     // Update main storage fuel level
     mainStorage.totalAdded += quantity;
+    mainStorage.currentFuelLevel += quantity; // Add the restocked quantity to current fuel level
+    
+    // Update current reading if scale reading is provided
     if (scaleReading) {
-      await mainStorage.updateReading(scaleReading, image);
+      mainStorage.currentReading = {
+        value: scaleReading,
+        image: image,
+        date: new Date()
+      };
     }
+    
+    // Save the updated main storage
+    await mainStorage.save();
 
     // Create restock record
     const restockData = {
@@ -394,7 +404,7 @@ router.post('/sub-pumps', authenticateToken, requirePermission('fuel.create'), a
   try {
     const subPumpData = {
       ...req.body,
-      currentFuelLevel: 0,
+      currentFuelLevel: req.body.initialFuelLevel || 0,
       totalDispensed: 0,
       totalAdded: 0
     };
@@ -537,9 +547,19 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
 
     // Update sub pump fuel level
     subPump.totalAdded += quantity;
+    subPump.currentFuelLevel += quantity; // Add the restocked quantity to current fuel level
+    
+    // Update current reading if scale reading is provided
     if (scaleReading) {
-      await subPump.updateReading(scaleReading, image);
+      subPump.currentReading = {
+        value: scaleReading,
+        image: image,
+        date: new Date()
+      };
     }
+    
+    // Save the updated sub pump
+    await subPump.save();
 
     // Create restock record
     const restockData = {

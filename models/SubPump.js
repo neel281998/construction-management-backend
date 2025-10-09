@@ -21,6 +21,18 @@ const subPumpSchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  // Initial fuel level in liters (actual quantity)
+  initialFuelLevel: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  // Initial scale reading in mm (physical measurement)
+  initialScaleReading: {
+    type: Number,
+    required: true,
+    min: 0
+  },
   initialReading: {
     value: {
       type: Number,
