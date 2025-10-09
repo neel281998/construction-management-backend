@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const VehicleAnalytics = require('../models/VehicleAnalytics');
 const Vehicle = require('../models/Vehicle');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
