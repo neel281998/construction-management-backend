@@ -1,6 +1,7 @@
 const express = require('express');
 const Inventory = require('../models/Inventory');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { logActivity, getActivityStyle } = require('../utils/activityLogger');
 
 const router = express.Router();
 
@@ -241,6 +242,27 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
     
     // Populate storage site for response
     await item.populate('storageSite', 'name code');
+    
+    // Log activity
+    await logActivity({
+      user: req.user,
+      action: 'inventory_created',
+      category: 'inventory',
+      title: 'New Inventory Item Created',
+      message: `${item.materialName || item.itemName} has been added to inventory`,
+      entityType: 'inventory',
+      entityId: item._id,
+      entityName: item.materialName || item.itemName,
+      metadata: {
+        category: item.category,
+        quantity: item.currentStock,
+        unit: item.unit,
+        storageSite: item.storageSite?.name,
+        vehicle: vehicle?.vehicleNumber
+      },
+      ...getActivityStyle('inventory_created'),
+      req
+    });
     
     res.status(201).json({
       success: true,

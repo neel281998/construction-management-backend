@@ -3,6 +3,7 @@ const Site = require('../models/Site');
 const Step = require('../models/Step');
 const SiteInventory = require('../models/SiteInventory');
 const { authenticateToken, requirePermission, canAccessSite } = require('../middleware/auth');
+const { logActivity, getActivityStyle } = require('../utils/activityLogger');
 
 const router = express.Router();
 
@@ -408,6 +409,25 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       { path: 'assignedVehicles.vehicle', select: 'vehicleNumber type brand model' }
     ]);
     
+    // Log activity
+    await logActivity({
+      user: req.user,
+      action: 'site_created',
+      category: 'site',
+      title: 'New Site Created',
+      message: `${site.name} has been created`,
+      entityType: 'site',
+      entityId: site._id,
+      entityName: site.name,
+      metadata: {
+        siteTypes: site.siteTypes,
+        totalSteps: steps.length,
+        estimatedVolume: site.estimatedVolumeM3
+      },
+      ...getActivityStyle('site_created'),
+      req
+    });
+    
     res.status(201).json({
       success: true,
       message: 'Site created successfully with steps',
@@ -602,6 +622,7 @@ router.put('/:id/status', authenticateToken, requirePermission('site.update'), a
       });
     }
     
+    const oldStatus = site.status;
     site.status = status;
     
     // Auto-set completion date if status is completed
@@ -610,6 +631,25 @@ router.put('/:id/status', authenticateToken, requirePermission('site.update'), a
     }
     
     await site.save();
+    
+    // Log activity
+    await logActivity({
+      user: req.user,
+      action: 'site_status_changed',
+      category: 'site',
+      title: 'Site Status Changed',
+      message: `${site.name} status changed from ${oldStatus} to ${status}`,
+      entityType: 'site',
+      entityId: site._id,
+      entityName: site.name,
+      metadata: {
+        oldStatus,
+        newStatus: status,
+        completionDate: site.actualEndDate
+      },
+      ...getActivityStyle('site_status_changed'),
+      req
+    });
     
     res.json({
       success: true,
@@ -846,8 +886,27 @@ router.delete('/:id', authenticateToken, requirePermission('site.delete'), async
       });
     }
     
+    const siteName = site.name;
     site.isActive = false;
     await site.save();
+    
+    // Log activity
+    await logActivity({
+      user: req.user,
+      action: 'site_deleted',
+      category: 'site',
+      title: 'Site Deleted',
+      message: `${siteName} has been deleted`,
+      entityType: 'site',
+      entityId: site._id,
+      entityName: siteName,
+      metadata: {
+        siteType: site.siteType,
+        status: site.status
+      },
+      ...getActivityStyle('site_deleted'),
+      req
+    });
     
     res.json({
       success: true,
