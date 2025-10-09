@@ -50,7 +50,7 @@ router.get('/vehicle/:vehicleId', authenticateToken, requirePermission('vehicle.
 
     // Calculate summary statistics
     const summary = await VehicleAnalytics.aggregate([
-      { $match: { vehicleId: mongoose.Types.ObjectId(vehicleId), status: 'completed', ...dateFilter } },
+      { $match: { vehicleId: new mongoose.Types.ObjectId(vehicleId), status: 'completed', ...dateFilter } },
       {
         $group: {
           _id: null,
@@ -205,7 +205,7 @@ router.get('/summary/:vehicleId', authenticateToken, requirePermission('vehicle.
     const summary = await VehicleAnalytics.aggregate([
       { 
         $match: { 
-          vehicleId: mongoose.Types.ObjectId(vehicleId), 
+          vehicleId: new mongoose.Types.ObjectId(vehicleId), 
           status: 'completed',
           date: { $gte: startDate }
         } 
