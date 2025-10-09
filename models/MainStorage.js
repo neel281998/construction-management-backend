@@ -30,13 +30,19 @@ const mainStorageSchema = new mongoose.Schema({
   // Initial fuel level in liters (actual quantity)
   initialFuelLevel: {
     type: Number,
-    required: true,
+    required: function() {
+      // Only required for new documents (not updates)
+      return this.isNew;
+    },
     min: 0
   },
   // Initial scale reading in mm/cm (physical measurement)
   initialScaleReading: {
     type: Number,
-    required: true,
+    required: function() {
+      // Only required for new documents (not updates)
+      return this.isNew;
+    },
     min: 0
   },
   initialReading: {
@@ -61,7 +67,10 @@ const mainStorageSchema = new mongoose.Schema({
     },
     image: {
       type: String,
-      required: true
+      required: function() {
+        // Only required for new documents (not updates)
+        return this.isNew;
+      }
     },
     date: {
       type: Date,
