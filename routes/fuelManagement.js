@@ -842,19 +842,66 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
   }
 });
 
+// Get all refueling history (general)
+router.get('/refuel-history', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, vehicleId, startDate, endDate } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const filter = {};
+    if (vehicleId) filter.vehicleId = vehicleId;
+    
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = new Date(startDate);
+      if (endDate) filter.date.$lte = new Date(endDate);
+    }
+
+    const refuelings = await VehicleRefueling.find(filter)
+      .populate('vehicleId', 'vehicleNumber type brand model')
+      .populate('pumpId', 'name location')
+      .populate('operator', 'firstName lastName')
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await VehicleRefueling.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        refuelings,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalCount: total,
+          hasNext: skip + refuelings.length < total,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get refueling history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch refueling history'
+    });
+  }
+});
+
 // Get vehicle refueling history
 router.get('/refuel-history/:vehicleId', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const refuelings = await VehicleRefueling.find({ vehicleId })
+    const refuelings = await VehicleRefueling.find({ vehicleId: req.params.vehicleId })
       .populate('pumpId', 'name location')
       .sort({ date: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
-    const total = await VehicleRefueling.countDocuments({ vehicleId });
+    const total = await VehicleRefueling.countDocuments({ vehicleId: req.params.vehicleId });
 
     res.json({
       success: true,
