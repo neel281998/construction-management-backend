@@ -218,3 +218,4 @@ if (require.main === module) {
       console.log('  clear: Clear all test restock data');
   }
 }
+

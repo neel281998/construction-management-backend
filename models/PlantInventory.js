@@ -113,6 +113,21 @@ const plantInventorySchema = new mongoose.Schema({
     ref: 'Plant',
     required: [true, 'Plant is required']
   },
+  broughtByVehicle: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Vehicle',
+      required: false
+    },
+    vehicleNumber: {
+      type: String,
+      required: false
+    },
+    vehicleType: {
+      type: String,
+      required: false
+    }
+  },
   lastRestocked: {
     type: Date,
     default: null

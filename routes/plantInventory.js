@@ -239,6 +239,16 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
     // Use the request body directly
     const inventoryData = { ...req.body };
     
+    // Add vehicle information if provided
+    if (vehicle && vehicle._id) {
+      inventoryData.broughtByVehicle = {
+        _id: vehicle._id,
+        vehicleNumber: vehicle.vehicleNumber,
+        vehicleType: vehicle.vehicleType || vehicle.type
+      };
+      console.log('🚗 Vehicle information added to plant inventory data:', inventoryData.broughtByVehicle);
+    }
+    
     console.log('Creating plant inventory with data:', inventoryData);
     
     // Create and save the inventory item
