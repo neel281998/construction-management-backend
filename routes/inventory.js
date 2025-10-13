@@ -192,6 +192,16 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
     // Use the request body directly
     const inventoryData = { ...req.body };
     
+    // Add vehicle information if provided
+    if (vehicle && vehicle._id) {
+      inventoryData.broughtByVehicle = {
+        _id: vehicle._id,
+        vehicleNumber: vehicle.vehicleNumber,
+        vehicleType: vehicle.type
+      };
+      console.log('🚗 Vehicle information added to inventory data:', inventoryData.broughtByVehicle);
+    }
+    
     console.log('Creating inventory with data:', inventoryData);
     
     // Create and save the inventory item
@@ -237,6 +247,33 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
       } catch (vehicleError) {
         console.error('Error updating vehicle trip tracking:', vehicleError);
         // Don't fail the inventory creation if vehicle update fails
+      }
+    }
+
+    // Record vehicle activity in storage site for new item creation
+    if (vehicle && vehicle._id) {
+      try {
+        const StorageSite = require('../models/StorageSite');
+        const storageSite = await StorageSite.findById(storageSite);
+        
+        if (storageSite) {
+          await storageSite.recordVehicleActivity(
+            'receipt', // New item creation is considered a receipt
+            vehicle,
+            item,
+            {
+              quantity: item.currentStock || 0,
+              supplier: item.supplier?.name || 'Unknown',
+              cost: item.cost || 0,
+              notes: 'New inventory item created'
+            },
+            req.user._id
+          );
+          console.log(`✅ Vehicle activity recorded for new item creation in storage site: ${storageSite.name}`);
+        }
+      } catch (storageSiteError) {
+        console.error('Error recording vehicle activity in storage site:', storageSiteError);
+        // Don't fail the inventory creation if storage site update fails
       }
     }
     

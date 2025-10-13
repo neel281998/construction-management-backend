@@ -89,6 +89,21 @@ const inventorySchema = new mongoose.Schema({
     ref: 'StorageSite',
     required: [true, 'Storage site is required']
   },
+  broughtByVehicle: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Vehicle',
+      required: false
+    },
+    vehicleNumber: {
+      type: String,
+      required: false
+    },
+    vehicleType: {
+      type: String,
+      required: false
+    }
+  },
   lastRestocked: {
     type: Date,
     default: null
