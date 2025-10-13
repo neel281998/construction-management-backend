@@ -605,6 +605,15 @@ router.post('/restock', authenticateToken, requirePermission('inventory.update')
   try {
     const { itemId, quantity, supplier, notes, cost, vehicle } = req.body;
     
+    console.log('🚚 Restock request received:', {
+      itemId,
+      quantity,
+      supplier,
+      notes,
+      cost,
+      vehicle
+    });
+    
     if (!itemId || !quantity) {
       return res.status(400).json({
         success: false,
@@ -639,10 +648,10 @@ router.post('/restock', authenticateToken, requirePermission('inventory.update')
       }
     }
     
-    // Update stock
     const previousStock = item.currentStock;
-    item.currentStock += quantity;
-    item.lastRestocked = new Date();
+    
+    // Use the restock method to properly add to history
+    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, cost);
     
     // Update supplier if provided
     if (supplier) {
@@ -650,9 +659,8 @@ router.post('/restock', authenticateToken, requirePermission('inventory.update')
         ...item.supplier,
         name: supplier
       };
+      await item.save();
     }
-    
-    await item.save();
     
     // Update vehicle trip tracking if vehicle is provided
     if (vehicle && vehicle._id) {
