@@ -638,4 +638,101 @@ router.delete('/:id/step-manager', authenticateToken, requirePermission('step.up
   }
 });
 
+// Update step progress with LBH values
+router.patch('/:id/progress', authenticateToken, requirePermission('site.update'), async (req, res) => {
+  try {
+    const { 
+      progressM3, 
+      notes,
+      length,
+      breadth, 
+      height,
+      unit = 'm'
+    } = req.body;
+    
+    const step = await Step.findById(req.params.id);
+    if (!step) {
+      return res.status(404).json({
+        success: false,
+        message: 'Step not found'
+      });
+    }
+    
+    // Update progress volume
+    if (progressM3 !== undefined) {
+      step.progressM3 = progressM3;
+    }
+    
+    // Update completed dimensions with LBH values if provided
+    if (length !== undefined || breadth !== undefined || height !== undefined) {
+      step.completedDimensions = {
+        ...step.completedDimensions,
+        length: length !== undefined ? length : step.completedDimensions.length,
+        breadth: breadth !== undefined ? breadth : step.completedDimensions.breadth,
+        height: height !== undefined ? height : step.completedDimensions.height,
+        unit: unit || step.completedDimensions.unit
+      };
+    }
+    
+    // Update notes if provided
+    if (notes) {
+      step.notes = notes;
+    }
+    
+    // Calculate progress from dimensions if LBH values were provided
+    if (length !== undefined || breadth !== undefined || height !== undefined) {
+      const progressResult = step.calculateProgressFromDimensions();
+      
+      // Update progress percentage
+      step.progressPercentage = step.estimatedVolumeM3 > 0 
+        ? Math.min((step.progressM3 / step.estimatedVolumeM3) * 100, 100)
+        : 0;
+      
+      // Update status based on progress
+      if (step.progressPercentage >= 100) {
+        step.status = 'completed';
+        step.completedDate = new Date();
+      } else if (step.progressPercentage > 0) {
+        step.status = 'in_progress';
+        if (!step.startDate) step.startDate = new Date();
+      }
+    }
+    
+    await step.save();
+    
+    // Recalculate site progress
+    const Site = require('../models/Site');
+    const site = await Site.findById(step.siteId);
+    if (site) {
+      await site.calculateOverallProgress();
+      await site.save();
+    }
+    
+    res.json({
+      success: true,
+      message: 'Step progress updated successfully',
+      data: { 
+        step: {
+          _id: step._id,
+          stepNumber: step.stepNumber,
+          stepName: step.stepName,
+          progressM3: step.progressM3,
+          progressPercentage: step.progressPercentage,
+          status: step.status,
+          completedDimensions: step.completedDimensions,
+          estimatedVolumeM3: step.estimatedVolumeM3,
+          notes: step.notes
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update step progress error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update step progress'
+    });
+  }
+});
+
 module.exports = router;

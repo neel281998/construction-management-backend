@@ -14,7 +14,6 @@ router.get('/receipts/step/:stepId', authenticateToken, requirePermission('site.
       status: { $ne: 'rejected' }
     })
     .populate('verifiedBy', 'firstName lastName email')
-    .populate('vehicle._id', 'vehicleNumber vehicleType driverName driverPhone')
     .sort({ deliveryDate: -1 });
     
     // Ensure all receipts have receivedBy field for mobile app compatibility
