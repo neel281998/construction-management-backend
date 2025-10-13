@@ -304,6 +304,129 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
   }
 });
 
+// Restock inventory item (specific route before /:id/restock)
+router.post('/restock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const { itemId, quantity, supplier, notes, cost, vehicle } = req.body;
+    
+    console.log('🚚 Restock request received:', {
+      itemId,
+      quantity,
+      supplier,
+      notes,
+      cost,
+      vehicle
+    });
+    
+    if (!itemId || !quantity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item ID and quantity are required'
+      });
+    }
+    
+    if (quantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity must be greater than 0'
+      });
+    }
+    
+    const item = await Inventory.findById(itemId);
+    
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inventory item not found'
+      });
+    }
+    
+    // Check access permissions for non-admin users
+    if (req.user.role !== 'admin') {
+      const assignedSites = req.user.assignedStorageSites || [];
+      if (!assignedSites.includes(item.storageSite.toString())) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to this inventory item'
+        });
+      }
+    }
+    
+    const previousStock = item.currentStock;
+    
+    // Use the restock method to properly add to history
+    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, cost);
+    
+    // Update supplier if provided
+    if (supplier) {
+      item.supplier = {
+        ...item.supplier,
+        name: supplier
+      };
+      await item.save();
+    }
+    
+    // Update vehicle trip tracking if vehicle is provided
+    if (vehicle && vehicle._id) {
+      try {
+        const Vehicle = require('../models/Vehicle');
+        const vehicleDoc = await Vehicle.findById(vehicle._id);
+        
+        if (vehicleDoc) {
+          // Update trip tracking
+          const today = new Date();
+          const todayStr = today.toISOString().split('T')[0];
+          const lastTripDate = vehicleDoc.tripTracking.lastTripDate;
+          const lastTripDateStr = lastTripDate ? lastTripDate.toISOString().split('T')[0] : null;
+          
+          // If it's a new day, reset daily trips
+          if (lastTripDateStr !== todayStr) {
+            vehicleDoc.tripTracking.dailyTrips = 1;
+          } else {
+            vehicleDoc.tripTracking.dailyTrips += 1;
+          }
+          
+          vehicleDoc.tripTracking.totalTrips += 1;
+          vehicleDoc.tripTracking.lastTripDate = today;
+          
+          await vehicleDoc.save();
+          
+          console.log(`Vehicle ${vehicle.vehicleNumber} trip count updated for restock: Daily: ${vehicleDoc.tripTracking.dailyTrips}, Total: ${vehicleDoc.tripTracking.totalTrips}`);
+        }
+      } catch (vehicleError) {
+        console.error('Error updating vehicle trip tracking for restock:', vehicleError);
+        // Don't fail the restock if vehicle update fails
+      }
+    }
+    
+    // Create restock record (you might want to create a separate RestockRecord model)
+    // For now, we'll just log it
+    console.log(`Restock: ${item.itemName} - Added ${quantity} units (${previousStock} -> ${item.currentStock}) by ${req.user.email}`);
+    
+    res.json({
+      success: true,
+      message: `Successfully restocked ${quantity} ${item.unit} of ${item.itemName}`,
+      data: {
+        itemId: item._id,
+        itemName: item.itemName,
+        previousStock,
+        addedQuantity: quantity,
+        newStock: item.currentStock,
+        unit: item.unit,
+        restockedBy: req.user._id,
+        restockedAt: item.lastRestocked
+      }
+    });
+    
+  } catch (error) {
+    console.error('Restock inventory error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to restock inventory'
+    });
+  }
+});
+
 // Restock inventory item
 router.post('/:id/restock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
@@ -600,128 +723,6 @@ router.put('/:id/stock', authenticateToken, requirePermission('inventory.update'
 
 
 
-// Restock inventory item
-router.post('/restock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
-  try {
-    const { itemId, quantity, supplier, notes, cost, vehicle } = req.body;
-    
-    console.log('🚚 Restock request received:', {
-      itemId,
-      quantity,
-      supplier,
-      notes,
-      cost,
-      vehicle
-    });
-    
-    if (!itemId || !quantity) {
-      return res.status(400).json({
-        success: false,
-        message: 'Item ID and quantity are required'
-      });
-    }
-    
-    if (quantity <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Quantity must be greater than 0'
-      });
-    }
-    
-    const item = await Inventory.findById(itemId);
-    
-    if (!item) {
-      return res.status(404).json({
-        success: false,
-        message: 'Inventory item not found'
-      });
-    }
-    
-    // Check access permissions for non-admin users
-    if (req.user.role !== 'admin') {
-      const assignedSites = req.user.assignedStorageSites || [];
-      if (!assignedSites.includes(item.storageSite.toString())) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied to this inventory item'
-        });
-      }
-    }
-    
-    const previousStock = item.currentStock;
-    
-    // Use the restock method to properly add to history
-    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, cost);
-    
-    // Update supplier if provided
-    if (supplier) {
-      item.supplier = {
-        ...item.supplier,
-        name: supplier
-      };
-      await item.save();
-    }
-    
-    // Update vehicle trip tracking if vehicle is provided
-    if (vehicle && vehicle._id) {
-      try {
-        const Vehicle = require('../models/Vehicle');
-        const vehicleDoc = await Vehicle.findById(vehicle._id);
-        
-        if (vehicleDoc) {
-          // Update trip tracking
-          const today = new Date();
-          const todayStr = today.toISOString().split('T')[0];
-          const lastTripDate = vehicleDoc.tripTracking.lastTripDate;
-          const lastTripDateStr = lastTripDate ? lastTripDate.toISOString().split('T')[0] : null;
-          
-          // If it's a new day, reset daily trips
-          if (lastTripDateStr !== todayStr) {
-            vehicleDoc.tripTracking.dailyTrips = 1;
-          } else {
-            vehicleDoc.tripTracking.dailyTrips += 1;
-          }
-          
-          vehicleDoc.tripTracking.totalTrips += 1;
-          vehicleDoc.tripTracking.lastTripDate = today;
-          
-          await vehicleDoc.save();
-          
-          console.log(`Vehicle ${vehicle.vehicleNumber} trip count updated for restock: Daily: ${vehicleDoc.tripTracking.dailyTrips}, Total: ${vehicleDoc.tripTracking.totalTrips}`);
-        }
-      } catch (vehicleError) {
-        console.error('Error updating vehicle trip tracking for restock:', vehicleError);
-        // Don't fail the restock if vehicle update fails
-      }
-    }
-    
-    // Create restock record (you might want to create a separate RestockRecord model)
-    // For now, we'll just log it
-    console.log(`Restock: ${item.itemName} - Added ${quantity} units (${previousStock} -> ${item.currentStock}) by ${req.user.email}`);
-    
-    res.json({
-      success: true,
-      message: `Successfully restocked ${quantity} ${item.unit} of ${item.itemName}`,
-      data: {
-        itemId: item._id,
-        itemName: item.itemName,
-        previousStock,
-        addedQuantity: quantity,
-        newStock: item.currentStock,
-        unit: item.unit,
-        restockedBy: req.user._id,
-        restockedAt: item.lastRestocked
-      }
-    });
-    
-  } catch (error) {
-    console.error('Restock inventory error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to restock inventory'
-    });
-  }
-});
 
 // Update inventory supplier (specific route before general /:id)
 router.put('/:id/supplier', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
