@@ -658,9 +658,9 @@ router.patch('/:id/progress', authenticateToken, requirePermission('site.update'
       });
     }
     
-    // Update progress volume
+    // Update progress volume (accumulate instead of replace)
     if (progressM3 !== undefined) {
-      step.progressM3 = progressM3;
+      step.progressM3 = (step.progressM3 || 0) + progressM3;
     }
     
     // Update completed dimensions with LBH values if provided
@@ -679,7 +679,7 @@ router.patch('/:id/progress', authenticateToken, requirePermission('site.update'
     if (length !== undefined || breadth !== undefined || height !== undefined) {
       const progressEntry = {
         date: new Date(),
-        progressM3: progressM3 || 0,
+        progressM3: progressM3 || 0, // Individual volume for this entry
         dimensions: {
           length: length || 0,
           breadth: breadth || 0,
