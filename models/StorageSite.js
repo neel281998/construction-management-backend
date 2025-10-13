@@ -132,6 +132,105 @@ const storageSiteSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  // Vehicle tracking for storage site operations
+  vehicleActivity: [{
+    operationType: {
+      type: String,
+      enum: ['restock', 'transfer_in', 'transfer_out', 'dispatch', 'receipt'],
+      required: true
+    },
+    vehicle: {
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Vehicle',
+        required: true
+      },
+      vehicleNumber: {
+        type: String,
+        required: true
+      },
+      vehicleType: {
+        type: String,
+        required: true
+      }
+    },
+    inventoryItem: {
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Inventory',
+        required: false
+      },
+      itemName: {
+        type: String,
+        required: false
+      },
+      quantity: {
+        type: Number,
+        required: false
+      },
+      unit: {
+        type: String,
+        required: false
+      }
+    },
+    operationDetails: {
+      quantity: {
+        type: Number,
+        required: true
+      },
+      supplier: {
+        type: String,
+        required: false
+      },
+      cost: {
+        type: Number,
+        required: false
+      },
+      notes: {
+        type: String,
+        required: false
+      }
+    },
+    performedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    performedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+  // Trip statistics for this storage site
+  tripStatistics: {
+    totalTrips: {
+      type: Number,
+      default: 0
+    },
+    dailyTrips: {
+      type: Number,
+      default: 0
+    },
+    lastTripDate: {
+      type: Date,
+      default: null
+    },
+    vehiclesUsed: [{
+      vehicle: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Vehicle'
+      },
+      vehicleNumber: String,
+      tripCount: {
+        type: Number,
+        default: 0
+      },
+      lastUsed: {
+        type: Date,
+        default: null
+      }
+    }]
   }
 }, {
   timestamps: true,
@@ -154,6 +253,93 @@ storageSiteSchema.virtual('capacityPercentage').get(function() {
 storageSiteSchema.virtual('activeManagersCount').get(function() {
   return (this.assignedManagers || []).filter(assignment => assignment.isActive).length;
 });
+
+// Method to record vehicle activity
+storageSiteSchema.methods.recordVehicleActivity = function(operationType, vehicle, inventoryItem, operationDetails, performedBy) {
+  console.log('🏢 Recording vehicle activity for storage site:', {
+    operationType,
+    vehicle: vehicle.vehicleNumber,
+    inventoryItem: inventoryItem?.itemName,
+    quantity: operationDetails.quantity
+  });
+
+  // Add to vehicle activity
+  this.vehicleActivity.push({
+    operationType,
+    vehicle: {
+      _id: vehicle._id,
+      vehicleNumber: vehicle.vehicleNumber,
+      vehicleType: vehicle.type
+    },
+    inventoryItem: inventoryItem ? {
+      _id: inventoryItem._id,
+      itemName: inventoryItem.itemName,
+      quantity: operationDetails.quantity,
+      unit: inventoryItem.unit
+    } : null,
+    operationDetails,
+    performedBy
+  });
+
+  // Update trip statistics
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  const lastTripDateStr = this.tripStatistics.lastTripDate ? 
+    this.tripStatistics.lastTripDate.toISOString().split('T')[0] : null;
+
+  // If it's a new day, reset daily trips
+  if (lastTripDateStr !== todayStr) {
+    this.tripStatistics.dailyTrips = 1;
+  } else {
+    this.tripStatistics.dailyTrips += 1;
+  }
+
+  this.tripStatistics.totalTrips += 1;
+  this.tripStatistics.lastTripDate = today;
+
+  // Update vehicle usage statistics
+  let vehicleStats = this.tripStatistics.vehiclesUsed.find(v => 
+    v.vehicle.toString() === vehicle._id.toString()
+  );
+
+  if (!vehicleStats) {
+    vehicleStats = {
+      vehicle: vehicle._id,
+      vehicleNumber: vehicle.vehicleNumber,
+      tripCount: 0,
+      lastUsed: null
+    };
+    this.tripStatistics.vehiclesUsed.push(vehicleStats);
+  }
+
+  vehicleStats.tripCount += 1;
+  vehicleStats.lastUsed = today;
+
+  console.log('📊 Updated storage site trip statistics:', {
+    totalTrips: this.tripStatistics.totalTrips,
+    dailyTrips: this.tripStatistics.dailyTrips,
+    vehicleTrips: vehicleStats.tripCount
+  });
+
+  return this.save();
+};
+
+// Method to get recent vehicle activity
+storageSiteSchema.methods.getRecentVehicleActivity = function(limit = 10) {
+  return this.vehicleActivity
+    .sort((a, b) => new Date(b.performedAt) - new Date(a.performedAt))
+    .slice(0, limit);
+};
+
+// Method to get vehicle usage statistics
+storageSiteSchema.methods.getVehicleUsageStats = function() {
+  return {
+    totalTrips: this.tripStatistics.totalTrips,
+    dailyTrips: this.tripStatistics.dailyTrips,
+    lastTripDate: this.tripStatistics.lastTripDate,
+    vehiclesUsed: this.tripStatistics.vehiclesUsed.sort((a, b) => b.tripCount - a.tripCount)
+  };
+};
 
 // Method to add manager
 storageSiteSchema.methods.addManager = function(managerId, assignedBy) {
@@ -218,5 +404,8 @@ storageSiteSchema.index({ code: 1 });
 storageSiteSchema.index({ 'assignedManagers.manager': 1 });
 storageSiteSchema.index({ isActive: 1 });
 storageSiteSchema.index({ 'address.city': 1 });
+storageSiteSchema.index({ 'vehicleActivity.performedAt': -1 });
+storageSiteSchema.index({ 'vehicleActivity.vehicle._id': 1 });
+storageSiteSchema.index({ 'vehicleActivity.operationType': 1 });
 
 module.exports = mongoose.model('StorageSite', storageSiteSchema);

@@ -365,6 +365,33 @@ router.post('/restock', authenticateToken, requirePermission('inventory.update')
       };
       await item.save();
     }
+
+    // Record vehicle activity in storage site
+    if (vehicle && vehicle._id) {
+      try {
+        const StorageSite = require('../models/StorageSite');
+        const storageSite = await StorageSite.findById(item.storageSite);
+        
+        if (storageSite) {
+          await storageSite.recordVehicleActivity(
+            'restock',
+            vehicle,
+            item,
+            {
+              quantity,
+              supplier: supplier || item.supplier.name,
+              cost,
+              notes
+            },
+            req.user._id
+          );
+          console.log(`✅ Vehicle activity recorded for storage site: ${storageSite.name}`);
+        }
+      } catch (storageSiteError) {
+        console.error('Error recording vehicle activity in storage site:', storageSiteError);
+        // Don't fail the restock if storage site update fails
+      }
+    }
     
     // Update vehicle trip tracking if vehicle is provided
     if (vehicle && vehicle._id) {

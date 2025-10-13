@@ -412,6 +412,76 @@ router.get('/available/managers', authenticateToken, requirePermission('storage_
   }
 });
 
+// Get storage site vehicle activity and trip statistics
+router.get('/:id/vehicle-activity', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limit = 20, operationType } = req.query;
+    
+    // Check access permissions
+    if (req.user.role !== 'admin') {
+      const assignedSites = req.user.assignedStorageSites || [];
+      if (!assignedSites.includes(id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to this storage site'
+        });
+      }
+    }
+    
+    const storageSite = await StorageSite.findById(id)
+      .populate('vehicleActivity.vehicle._id', 'vehicleNumber brand model type status')
+      .populate('vehicleActivity.inventoryItem._id', 'itemName unit category')
+      .populate('vehicleActivity.performedBy', 'firstName lastName email');
+    
+    if (!storageSite) {
+      return res.status(404).json({
+        success: false,
+        message: 'Storage site not found'
+      });
+    }
+    
+    // Get recent vehicle activity
+    let recentActivity = storageSite.getRecentVehicleActivity(parseInt(limit));
+    
+    // Filter by operation type if specified
+    if (operationType) {
+      recentActivity = recentActivity.filter(activity => 
+        activity.operationType === operationType
+      );
+    }
+    
+    // Get vehicle usage statistics
+    const vehicleStats = storageSite.getVehicleUsageStats();
+    
+    res.json({
+      success: true,
+      data: {
+        storageSite: {
+          _id: storageSite._id,
+          name: storageSite.name,
+          code: storageSite.code
+        },
+        recentActivity,
+        vehicleStats,
+        summary: {
+          totalOperations: storageSite.vehicleActivity.length,
+          totalTrips: vehicleStats.totalTrips,
+          dailyTrips: vehicleStats.dailyTrips,
+          vehiclesUsed: vehicleStats.vehiclesUsed.length
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get storage site vehicle activity error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch storage site vehicle activity'
+    });
+  }
+});
+
 // Get storage site inventory
 router.get('/:id/inventory', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
   try {
