@@ -197,7 +197,7 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
       inventoryData.broughtByVehicle = {
         _id: vehicle._id,
         vehicleNumber: vehicle.vehicleNumber,
-        vehicleType: vehicle.type
+        vehicleType: vehicle.vehicleType || vehicle.type
       };
       console.log('🚗 Vehicle information added to inventory data:', inventoryData.broughtByVehicle);
     }
@@ -254,10 +254,10 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
     if (vehicle && vehicle._id) {
       try {
         const StorageSite = require('../models/StorageSite');
-        const storageSite = await StorageSite.findById(storageSite);
+        const storageSiteDoc = await StorageSite.findById(storageSite);
         
-        if (storageSite) {
-          await storageSite.recordVehicleActivity(
+        if (storageSiteDoc) {
+          await storageSiteDoc.recordVehicleActivity(
             'receipt', // New item creation is considered a receipt
             vehicle,
             item,
@@ -269,7 +269,7 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
             },
             req.user._id
           );
-          console.log(`✅ Vehicle activity recorded for new item creation in storage site: ${storageSite.name}`);
+          console.log(`✅ Vehicle activity recorded for new item creation in storage site: ${storageSiteDoc.name}`);
         }
       } catch (storageSiteError) {
         console.error('Error recording vehicle activity in storage site:', storageSiteError);
