@@ -665,13 +665,36 @@ router.patch('/:id/progress', authenticateToken, requirePermission('site.update'
     
     // Update completed dimensions with LBH values if provided
     if (length !== undefined || breadth !== undefined || height !== undefined) {
+      // Store the latest dimensions (replace previous values)
       step.completedDimensions = {
         ...step.completedDimensions,
         length: length !== undefined ? length : step.completedDimensions.length,
         breadth: breadth !== undefined ? breadth : step.completedDimensions.breadth,
         height: height !== undefined ? height : step.completedDimensions.height,
-        unit: unit || step.completedDimensions.unit
+        unit: unit || step.completedDimensions.unit || 'm'
       };
+    }
+    
+    // Add progress entry to history if LBH values were provided
+    if (length !== undefined || breadth !== undefined || height !== undefined) {
+      const progressEntry = {
+        date: new Date(),
+        progressM3: progressM3 || 0,
+        dimensions: {
+          length: length || 0,
+          breadth: breadth || 0,
+          height: height || 0,
+          unit: unit || 'm'
+        },
+        notes: notes || '',
+        updatedBy: req.user.id
+      };
+      
+      // Add to progress history
+      if (!step.progressHistory) {
+        step.progressHistory = [];
+      }
+      step.progressHistory.push(progressEntry);
     }
     
     // Update notes if provided
@@ -721,7 +744,8 @@ router.patch('/:id/progress', authenticateToken, requirePermission('site.update'
           status: step.status,
           completedDimensions: step.completedDimensions,
           estimatedVolumeM3: step.estimatedVolumeM3,
-          notes: step.notes
+          notes: step.notes,
+          progressHistory: step.progressHistory
         }
       }
     });

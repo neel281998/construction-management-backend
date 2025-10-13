@@ -109,6 +109,19 @@ const stepSchema = new mongoose.Schema({
   notes: {
     type: String
   },
+  // Progress history to track multiple updates with LBH values
+  progressHistory: [{
+    date: { type: Date, default: Date.now },
+    progressM3: { type: Number, required: true },
+    dimensions: {
+      length: { type: Number, default: 0 },
+      breadth: { type: Number, default: 0 },
+      height: { type: Number, default: 0 },
+      unit: { type: String, default: 'm' }
+    },
+    notes: { type: String },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+  }],
   // Step assignment to users
   assignedUsers: [{
     user: {
