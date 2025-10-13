@@ -139,6 +139,26 @@ const plantInventorySchema = new mongoose.Schema({
     notes: {
       type: String,
       maxlength: [200, 'Notes cannot exceed 200 characters']
+    },
+    vehicle: {
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Vehicle',
+        required: false
+      },
+      vehicleNumber: {
+        type: String,
+        required: false
+      },
+      vehicleType: {
+        type: String,
+        required: false
+      }
+    },
+    cost: {
+      type: Number,
+      required: false,
+      min: [0, 'Cost cannot be negative']
     }
   }],
   consumptionHistory: [{
@@ -254,13 +274,15 @@ plantInventorySchema.virtual('stockPercentage').get(function() {
 });
 
 // Method to restock item
-plantInventorySchema.methods.restock = function(quantity, supplier, restockedBy, notes = '') {
+plantInventorySchema.methods.restock = function(quantity, supplier, restockedBy, notes = '', vehicle = null, cost = null) {
   // Add to restock history
   this.restockHistory.push({
     quantity,
     supplier,
     restockedBy,
-    notes
+    notes,
+    vehicle,
+    cost
   });
   
   // Update current stock

@@ -346,7 +346,7 @@ router.post('/:id/restock', authenticateToken, requirePermission('plant_inventor
     const previousStock = item.currentStock;
     
     // Use the restock method
-    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes);
+    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, req.body.cost);
     
     // Update vehicle trip tracking if vehicle is provided
     if (vehicle && vehicle._id) {
