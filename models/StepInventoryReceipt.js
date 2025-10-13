@@ -95,6 +95,25 @@ const stepInventoryReceiptSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // Vehicle information
+  vehicle: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Vehicle'
+    },
+    vehicleNumber: {
+      type: String
+    },
+    vehicleType: {
+      type: String
+    },
+    driverName: {
+      type: String
+    },
+    driverPhone: {
+      type: String
+    }
+  },
   // Verification
   verifiedBy: {
     type: mongoose.Schema.Types.ObjectId,

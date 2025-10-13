@@ -267,6 +267,13 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
           deliveryDate: new Date(),
           deliveryImages: deliveryImages || [],
           deliveryNotes: notes,
+          vehicle: {
+            _id: vehicle._id,
+            vehicleNumber: vehicle.vehicleNumber,
+            vehicleType: vehicle.type,
+            driverName: vehicle.assignedTo ? 'Assigned Driver' : undefined,
+            driverPhone: undefined
+          },
           receivedBy: {
             _id: req.user._id,
             firstName: req.user.firstName,

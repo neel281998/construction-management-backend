@@ -14,6 +14,7 @@ router.get('/receipts/step/:stepId', authenticateToken, requirePermission('site.
       status: { $ne: 'rejected' }
     })
     .populate('verifiedBy', 'firstName lastName email')
+    .populate('vehicle._id', 'vehicleNumber vehicleType driverName driverPhone')
     .sort({ deliveryDate: -1 });
     
     // Ensure all receipts have receivedBy field for mobile app compatibility
@@ -444,7 +445,8 @@ router.post('/receipts', authenticateToken, requirePermission('site.update'), as
       deliveryDate,
       deliveryImages,
       deliveryNotes,
-      verificationNotes
+      verificationNotes,
+      vehicle
     } = req.body;
     
     // Validate required fields
@@ -482,6 +484,13 @@ router.post('/receipts', authenticateToken, requirePermission('site.update'), as
       deliveryDate: deliveryDate || new Date(),
       deliveryImages: deliveryImages || [],
       deliveryNotes,
+      vehicle: vehicle ? {
+        _id: vehicle._id,
+        vehicleNumber: vehicle.vehicleNumber,
+        vehicleType: vehicle.vehicleType,
+        driverName: vehicle.driverName,
+        driverPhone: vehicle.driverPhone
+      } : undefined,
       verifiedBy: req.user._id,
       verificationNotes,
       status: 'received'
