@@ -275,8 +275,7 @@ plantInventorySchema.virtual('stockPercentage').get(function() {
 
 // Method to restock item
 plantInventorySchema.methods.restock = function(quantity, supplier, restockedBy, notes = '', vehicle = null, cost = null) {
-  // Add to restock history
-  this.restockHistory.push({
+  console.log('🌱 Plant inventory restock method called with:', {
     quantity,
     supplier,
     restockedBy,
@@ -284,6 +283,20 @@ plantInventorySchema.methods.restock = function(quantity, supplier, restockedBy,
     vehicle,
     cost
   });
+  
+  // Add to restock history
+  const restockEntry = {
+    quantity,
+    supplier,
+    restockedBy,
+    notes,
+    vehicle,
+    cost
+  };
+  
+  this.restockHistory.push(restockEntry);
+  console.log('📝 Added plant inventory restock entry:', restockEntry);
+  console.log('📊 Total plant inventory restock history entries:', this.restockHistory.length);
   
   // Update current stock
   this.currentStock += quantity;
