@@ -72,55 +72,7 @@ router.get('/:id', authenticateToken, requirePermission('site.read'), async (req
   }
 });
 
-// Update step progress
-router.patch('/:id/progress', authenticateToken, requirePermission('site.update'), async (req, res) => {
-  try {
-    const { progressM3, notes } = req.body;
-    
-    const step = await Step.findById(req.params.id);
-    if (!step) {
-      return res.status(404).json({
-        success: false,
-        message: 'Step not found'
-      });
-    }
-    
-    step.progressM3 = progressM3 || step.progressM3;
-    if (notes) step.notes = notes;
-    
-    // Update status based on progress
-    const progressPercentage = (step.progressM3 / step.estimatedVolumeM3) * 100;
-    step.progressPercentage = Math.round(progressPercentage * 100) / 100; // Round to 2 decimal places
-    if (progressPercentage >= 100) {
-      step.status = 'completed';
-      step.completedDate = new Date();
-    } else if (progressPercentage > 0) {
-      step.status = 'in_progress';
-      if (!step.startDate) step.startDate = new Date();
-    }
-    
-    await step.save();
-    
-    // Recalculate site progress
-    const Site = require('../models/Site');
-    const site = await Site.findById(step.siteId);
-    if (site) {
-      await site.calculateOverallProgress();
-      await site.save();
-    }
-    
-    res.json({
-      success: true,
-      data: { step }
-    });
-  } catch (error) {
-    console.error('Update step progress error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update step progress'
-    });
-  }
-});
+// Old route removed - using the new route with LBH support below
 
 // Update step dimensions and calculate progress
 router.patch('/:id/dimensions', authenticateToken, requirePermission('site.update'), async (req, res) => {
