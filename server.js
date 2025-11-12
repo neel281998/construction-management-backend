@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
@@ -45,6 +46,9 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Compression middleware - compress all responses
+app.use(compression());
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -78,7 +82,10 @@ async function connectDB() {
   if (isConnected) return;
 
   try {
-    const mongoUri = process.env.MONGODB_URI || 'mongodb+srv://constructionchoudhary159632:EISf9b3Mbf8toQWe@cluster0.ug5nrys.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+    const mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+      throw new Error('MONGODB_URI environment variable is required');
+    }
     const conn = await mongoose.connect(mongoUri, {
       dbName: 'construction_management',
       bufferCommands: true,

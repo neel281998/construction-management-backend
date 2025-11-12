@@ -5,8 +5,8 @@ const plantSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Plant name is required'],
     trim: true,
-    maxlength: [100, 'Plant name cannot exceed 100 characters'],
-    unique: true
+    maxlength: [100, 'Plant name cannot exceed 100 characters']
+    // unique removed - defined in index below to avoid duplicate
   },
   code: {
     type: String,

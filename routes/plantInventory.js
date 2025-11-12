@@ -203,7 +203,6 @@ router.get('/:id', authenticateToken, requirePermission('plant_inventory.read'),
 // Create new plant inventory item
 router.post('/', authenticateToken, requirePermission('plant_inventory.create'), async (req, res) => {
   try {
-    console.log('Create plant inventory request body:', req.body);
     const { plant, vehicle } = req.body;
     
     // Validate vehicle selection (mandatory)
@@ -246,10 +245,7 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
         vehicleNumber: vehicle.vehicleNumber,
         vehicleType: vehicle.vehicleType || vehicle.type
       };
-      console.log('🚗 Vehicle information added to plant inventory data:', inventoryData.broughtByVehicle);
     }
-    
-    console.log('Creating plant inventory with data:', inventoryData);
     
     // Create and save the inventory item
     const item = new PlantInventory(inventoryData);
@@ -279,8 +275,6 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
           vehicleDoc.tripTracking.lastTripDate = today;
           
           await vehicleDoc.save();
-          
-          console.log(`Vehicle ${vehicle.vehicleNumber} trip count updated for plant inventory creation: Daily: ${vehicleDoc.tripTracking.dailyTrips}, Total: ${vehicleDoc.tripTracking.totalTrips}`);
         }
       } catch (vehicleError) {
         console.error('Error updating vehicle trip tracking for plant inventory creation:', vehicleError);
@@ -382,8 +376,6 @@ router.post('/:id/restock', authenticateToken, requirePermission('plant_inventor
           vehicleDoc.tripTracking.lastTripDate = today;
           
           await vehicleDoc.save();
-          
-          console.log(`Vehicle ${vehicle.vehicleNumber} trip count updated for plant inventory restock: Daily: ${vehicleDoc.tripTracking.dailyTrips}, Total: ${vehicleDoc.tripTracking.totalTrips}`);
         }
       } catch (vehicleError) {
         console.error('Error updating vehicle trip tracking for plant inventory restock:', vehicleError);
@@ -759,15 +751,6 @@ router.post('/restock', authenticateToken, requirePermission('plant_inventory.up
   try {
     const { itemId, quantity, supplier, notes, cost, vehicle } = req.body;
     
-    console.log('🌱 Plant inventory restock request received:', {
-      itemId,
-      quantity,
-      supplier,
-      notes,
-      cost,
-      vehicle
-    });
-    
     if (!itemId || !quantity) {
       return res.status(400).json({
         success: false,
@@ -836,8 +819,6 @@ router.post('/restock', authenticateToken, requirePermission('plant_inventory.up
           vehicleDoc.tripTracking.lastTripDate = today;
           
           await vehicleDoc.save();
-          
-          console.log(`Vehicle ${vehicle.vehicleNumber} trip count updated for plant inventory restock: Daily: ${vehicleDoc.tripTracking.dailyTrips}, Total: ${vehicleDoc.tripTracking.totalTrips}`);
         }
       } catch (vehicleError) {
         console.error('Error updating vehicle trip tracking for plant inventory restock:', vehicleError);

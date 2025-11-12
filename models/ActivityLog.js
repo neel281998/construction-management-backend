@@ -104,8 +104,8 @@ const activityLogSchema = new mongoose.Schema({
   // Timestamps
   createdAt: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
+    // Index removed - using compound indexes below which include createdAt
   }
 }, {
   timestamps: false // We only need createdAt

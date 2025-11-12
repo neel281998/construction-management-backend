@@ -327,5 +327,7 @@ siteSchema.index({ status: 1 });
 siteSchema.index({ siteManager: 1 });
 siteSchema.index({ 'address.city': 1 });
 siteSchema.index({ startDate: 1, expectedEndDate: 1 });
+siteSchema.index({ isActive: 1, status: 1 }); // Compound index for common queries
+siteSchema.index({ isActive: 1, createdAt: -1 }); // For sorted pagination queries
 
 module.exports = mongoose.model('Site', siteSchema);

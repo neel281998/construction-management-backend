@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 require('dotenv').config();
 
 const authRoutes = require('../routes/auth');
@@ -42,6 +43,9 @@ const app = express();
 
 // Trust proxy for Vercel
 app.set('trust proxy', 1);
+
+// Compression middleware - compress all responses
+app.use(compression());
 
 // Security middleware
 app.use(helmet());
@@ -87,7 +91,11 @@ async function connectDB() {
   }
 
   // Start new connection
-  connectionPromise = mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://constructionchoudhary159632:EISf9b3Mbf8toQWe@cluster0.ug5nrys.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0', {
+  const mongoUri = process.env.MONGODB_URI;
+  if (!mongoUri) {
+    throw new Error('MONGODB_URI environment variable is required');
+  }
+  connectionPromise = mongoose.connect(mongoUri, {
     dbName: 'construction_management',
     bufferCommands: false, // Disable buffering for serverless
     maxPoolSize: 1, // Single connection for serverless

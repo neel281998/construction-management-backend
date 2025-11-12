@@ -340,5 +340,7 @@ stepSchema.methods.calculateProgressFromDimensions = function() {
 // Index for efficient queries
 stepSchema.index({ siteId: 1, stepNumber: 1 });
 stepSchema.index({ siteId: 1, status: 1 });
+stepSchema.index({ siteId: 1, isActive: 1 }); // For optimized batch queries
+stepSchema.index({ isActive: 1 }); // For filtering active steps
 
 module.exports = mongoose.model('Step', stepSchema);

@@ -4,11 +4,16 @@ const Step = require('../models/Step');
 const SiteInventory = require('../models/SiteInventory');
 const { authenticateToken, requirePermission, canAccessSite } = require('../middleware/auth');
 const { logActivity, getActivityStyle } = require('../utils/activityLogger');
+const { cacheMiddleware } = require('../middleware/cache');
 
 const router = express.Router();
 
 // Get all sites (with pagination and filtering)
-router.get('/', authenticateToken, requirePermission('site.read'), async (req, res) => {
+// Cache for 30 seconds since this endpoint is called frequently but data changes moderately
+router.get('/', authenticateToken, requirePermission('site.read'), cacheMiddleware(30000, (req) => {
+  // Include query params in cache key for different filters
+  return `/api/sites?${new URLSearchParams(req.query).toString()}`;
+}), async (req, res) => {
   try {
     const {
       page = 1,
@@ -60,11 +65,26 @@ router.get('/', authenticateToken, requirePermission('site.read'), async (req, r
       Site.countDocuments(query)
     ]);
 
-    // Calculate real-time progress for each site
-    const sitesWithProgress = await Promise.all(sites.map(async (site) => {
+    // OPTIMIZATION: Fetch all steps for all sites in a single query instead of N+1 queries
+    const siteIds = sites.map(site => site._id);
+    const allSteps = await Step.find({ 
+      siteId: { $in: siteIds }, 
+      isActive: true 
+    }).select('siteId estimatedVolumeM3 progressM3 status').lean();
+
+    // Group steps by siteId for O(1) lookup
+    const stepsBySiteId = {};
+    allSteps.forEach(step => {
+      if (!stepsBySiteId[step.siteId]) {
+        stepsBySiteId[step.siteId] = [];
+      }
+      stepsBySiteId[step.siteId].push(step);
+    });
+
+    // Calculate real-time progress for each site using the pre-fetched steps
+    const sitesWithProgress = sites.map((site) => {
       try {
-        // Get steps for this site
-        const steps = await Step.find({ siteId: site._id, isActive: true });
+        const steps = stepsBySiteId[site._id.toString()] || [];
         
         if (steps.length === 0) {
           return {
@@ -77,8 +97,8 @@ router.get('/', authenticateToken, requirePermission('site.read'), async (req, r
         }
 
         // Calculate progress from step data (same logic as progress endpoint)
-        const totalEstimatedM3 = steps.reduce((sum, step) => sum + step.estimatedVolumeM3, 0);
-        const totalProgressM3 = steps.reduce((sum, step) => sum + step.progressM3, 0);
+        const totalEstimatedM3 = steps.reduce((sum, step) => sum + (step.estimatedVolumeM3 || 0), 0);
+        const totalProgressM3 = steps.reduce((sum, step) => sum + (step.progressM3 || 0), 0);
         const overallProgressPercentage = totalEstimatedM3 > 0 
           ? Math.round((totalProgressM3 / totalEstimatedM3) * 100) 
           : 0;
@@ -103,7 +123,7 @@ router.get('/', authenticateToken, requirePermission('site.read'), async (req, r
           currentStep: site.currentStep || 1
         };
       }
-    }));
+    });
     
     res.json({
       success: true,
@@ -367,9 +387,6 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
         await site.save();
       } else {
         // If no volumes provided, don't distribute - let StepWiseForm calculate them
-        console.log('No step volumes provided - steps will need to be configured with dimensions');
-        console.log('Steps created with 0 volume - they need to be updated with actual dimensions');
-        
         // Don't distribute volumes - let the StepWiseForm calculate them from LBH
         // This ensures users enter actual dimensions instead of getting arbitrary distributed volumes
       }
@@ -387,20 +404,6 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     // Calculate initial progress based on created steps
     const progressResult = await site.calculateOverallProgress();
     await site.save();
-    
-    console.log('Site created with progress:', {
-      siteId: site._id,
-      siteName: site.name,
-      totalSteps: steps.length,
-      estimatedVolumeM3: site.estimatedVolumeM3,
-      progress: progressResult.progress,
-      totalProgressM3: progressResult.totalProgressM3,
-      stepVolumes: steps.map(step => ({
-        stepName: step.stepName,
-        estimatedVolume: step.estimatedVolumeM3,
-        siteType: step.siteType
-      }))
-    });
     
     // Populate the response
     await site.populate([
@@ -488,17 +491,6 @@ async function createStepsForSiteLegacy(siteId, siteType, totalVolumeM3) {
 // Helper function to create steps with provided data
 async function createStepsWithData(siteId, siteTypes, stepDataArray, siteEstimatedVolume = 0) {
   try {
-    console.log('Creating steps with data:', {
-      siteId,
-      siteTypes,
-      stepDataCount: stepDataArray.length,
-      stepData: stepDataArray.map(step => ({
-        stepName: step.stepName,
-        estimatedVolumeM3: step.estimatedVolumeM3,
-        siteType: step.siteType
-      }))
-    });
-    
     const stepPromises = stepDataArray.map(stepData => {
       const newStep = new Step({
         siteId,
@@ -1352,7 +1344,6 @@ router.post('/:id/recalculate-progress', authenticateToken, requirePermission('s
     // Check if steps have 0 volume and fix them
     const stepsWithZeroVolume = steps.filter(step => step.estimatedVolumeM3 === 0);
     if (stepsWithZeroVolume.length > 0 && site.estimatedVolumeM3 > 0) {
-      console.log(`Fixing ${stepsWithZeroVolume.length} steps with zero volume for site ${site.name}`);
       const volumePerStep = site.estimatedVolumeM3 / steps.length;
       
       for (const step of stepsWithZeroVolume) {
@@ -1360,8 +1351,6 @@ router.post('/:id/recalculate-progress', authenticateToken, requirePermission('s
         step.volumeCalculations.estimatedVolume = volumePerStep;
         await step.save();
       }
-      
-      console.log(`Distributed ${site.estimatedVolumeM3} m³ among ${steps.length} steps (${volumePerStep} m³ per step)`);
     }
     
     // Calculate overall progress

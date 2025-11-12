@@ -63,11 +63,6 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
       ];
     }
     
-    // Debug logging
-    console.log('Inventory query:', JSON.stringify(query, null, 2));
-    console.log('User role:', req.user.role);
-    console.log('Storage site ID:', storageSiteId);
-    
     // Execute query with pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
@@ -138,14 +133,6 @@ router.get('/:id', authenticateToken, requirePermission('inventory.read'), async
         message: 'Access denied to this inventory item'
       });
     }
-    
-    console.log('Returning inventory item:', {
-      id: item._id,
-      name: item.itemName,
-      currentStock: item.currentStock,
-      storageSite: item.storageSite,
-      createdAt: item.createdAt
-    });
     
     res.json({
       success: true,
