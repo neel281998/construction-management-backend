@@ -32,8 +32,7 @@ const plantOutputDispatchSchema = new mongoose.Schema({
     name: {
       type: String,
       required: true
-    },
-    code: String
+    }
   },
   destination: {
     type: {

@@ -57,7 +57,6 @@ const inventoryTransferSchema = new mongoose.Schema({
       type: String,
       required: false
     },
-    code: String,
     plantType: String
   },
   toConstructionSite: {

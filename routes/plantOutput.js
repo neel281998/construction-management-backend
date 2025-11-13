@@ -76,7 +76,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     const [outputs, totalCount] = await Promise.all([
       PlantOutput.find(query)
-        .populate('plant', 'name code plantType')
+        .populate('plant', 'name plantType')
         .populate('createdBy', 'firstName lastName email')
         .sort({ productionDate: -1 })
         .skip(skip)
@@ -111,7 +111,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
   try {
     const output = await PlantOutput.findById(req.params.id)
-      .populate('plant', 'name code plantType')
+      .populate('plant', 'name plantType')
       .populate('createdBy', 'firstName lastName email')
       .populate('consumedMaterials.materialId', 'itemName unit')
       .populate('transferHistory.transferredBy', 'firstName lastName email')
@@ -180,7 +180,10 @@ router.post('/', authenticateToken, requirePermission('plant_output.create'), as
           $lt: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1)
         }
       });
-      req.body.batchNumber = `${plantExists.code || 'PLT'}-${dateStr}-${String(count + 1).padStart(3, '0')}`;
+      const namePrefix = plantExists.name
+        ? plantExists.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4) || 'PLT'
+        : 'PLT';
+      req.body.batchNumber = `${namePrefix}-${dateStr}-${String(count + 1).padStart(3, '0')}`;
     }
     
     // Create the plant output record
@@ -212,7 +215,7 @@ router.post('/', authenticateToken, requirePermission('plant_output.create'), as
     await output.calculateEfficiency();
     
     // Populate for response
-    await output.populate('plant', 'name code plantType');
+    await output.populate('plant', 'name plantType');
     await output.populate('createdBy', 'firstName lastName email');
     await output.populate('consumedMaterials.materialId', 'itemName unit');
     
@@ -405,7 +408,7 @@ router.put('/:id', authenticateToken, requirePermission('plant_output.update'), 
     }
     
     // Populate for response
-    await output.populate('plant', 'name code plantType');
+    await output.populate('plant', 'name plantType');
     await output.populate('createdBy', 'firstName lastName email');
     await output.populate('consumedMaterials.materialId', 'itemName unit');
     

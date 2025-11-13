@@ -152,9 +152,11 @@ plantOutputSchema.virtual('totalTransferred').get(function() {
 plantOutputSchema.pre('save', async function(next) {
   if (!this.outputId) {
     const count = await this.constructor.countDocuments();
-    const plantCode = await mongoose.model('Plant').findById(this.plant).select('code');
-    const code = plantCode ? plantCode.code : 'PLANT';
-    this.outputId = `${code}-OUT-${String(count + 1).padStart(4, '0')}`;
+    const plantDoc = await mongoose.model('Plant').findById(this.plant).select('name');
+    const prefix = plantDoc && plantDoc.name
+      ? plantDoc.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4) || 'PLANT'
+      : 'PLANT';
+    this.outputId = `${prefix}-OUT-${String(count + 1).padStart(4, '0')}`;
   }
   next();
 });

@@ -118,7 +118,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     const [items, totalCount, lowStockCount] = await Promise.all([
       PlantInventory.find(query)
-        .populate('plant', 'name code plantType')
+        .populate('plant', 'name plantType')
         .sort({ itemName: 1 })
         .skip(skip)
         .limit(parseInt(limit)),
@@ -166,7 +166,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
   try {
     const item = await PlantInventory.findById(req.params.id)
-      .populate('plant', 'name code plantType');
+      .populate('plant', 'name plantType');
     
     if (!item) {
       return res.status(404).json({
@@ -283,7 +283,7 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
     }
     
     // Populate plant for response
-    await item.populate('plant', 'name code plantType');
+    await item.populate('plant', 'name plantType');
     
     res.status(201).json({
       success: true,
@@ -539,7 +539,7 @@ router.get('/alerts/low-stock', authenticateToken, requirePermission('plant_inve
     }
     
     const lowStockItems = await PlantInventory.find(query)
-      .populate('plant', 'name code plantType')
+      .populate('plant', 'name plantType')
       .sort({ currentStock: 1 });
     
     res.json({
@@ -636,7 +636,7 @@ router.put('/:id', authenticateToken, requirePermission('plant_inventory.update'
     await item.save();
     
     // Populate plant for response
-    await item.populate('plant', 'name code plantType');
+    await item.populate('plant', 'name plantType');
     
     res.json({
       success: true,

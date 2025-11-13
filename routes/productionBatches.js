@@ -76,7 +76,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     const [batches, totalCount] = await Promise.all([
       ProductionBatch.find(query)
-        .populate('plant', 'name code plantType')
+        .populate('plant', 'name plantType')
         .populate('createdBy', 'name email')
         .populate('consumedMaterials.inventoryItem', 'itemName category unit')
         .sort({ startTime: -1 })
@@ -112,7 +112,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
   try {
     const batch = await ProductionBatch.findById(req.params.id)
-      .populate('plant', 'name code plantType')
+      .populate('plant', 'name plantType')
       .populate('createdBy', 'name email')
       .populate('consumedMaterials.inventoryItem', 'itemName category unit currentStock')
       .populate('outputMaterials');
@@ -214,7 +214,7 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
     
     // Populate the created batch
     await batch.populate([
-      { path: 'plant', select: 'name code plantType' },
+      { path: 'plant', select: 'name plantType' },
       { path: 'createdBy', select: 'name email' },
       { path: 'consumedMaterials.inventoryItem', select: 'itemName category unit' }
     ]);
@@ -274,7 +274,7 @@ router.put('/:id', authenticateToken, requirePermission('plant_inventory.update'
     
     // Populate the updated batch
     await batch.populate([
-      { path: 'plant', select: 'name code plantType' },
+      { path: 'plant', select: 'name plantType' },
       { path: 'createdBy', select: 'name email' },
       { path: 'consumedMaterials.inventoryItem', select: 'itemName category unit' }
     ]);
@@ -326,7 +326,7 @@ router.post('/:id/complete', authenticateToken, requirePermission('plant_invento
     
     // Populate the completed batch
     await batch.populate([
-      { path: 'plant', select: 'name code plantType' },
+      { path: 'plant', select: 'name plantType' },
       { path: 'createdBy', select: 'name email' },
       { path: 'consumedMaterials.inventoryItem', select: 'itemName category unit' }
     ]);
@@ -378,7 +378,7 @@ router.post('/:id/cancel', authenticateToken, requirePermission('plant_inventory
     
     // Populate the cancelled batch
     await batch.populate([
-      { path: 'plant', select: 'name code plantType' },
+      { path: 'plant', select: 'name plantType' },
       { path: 'createdBy', select: 'name email' },
       { path: 'consumedMaterials.inventoryItem', select: 'itemName category unit' }
     ]);
@@ -426,7 +426,7 @@ router.get('/plants/:plantId/consumed-materials', authenticateToken, requirePerm
         $lte: endDate
       }
     })
-    .populate('plant', 'name code')
+    .populate('plant', 'name plantType')
     .select('itemName category unit currentStock consumptionHistory');
     
     // Filter and format consumption history

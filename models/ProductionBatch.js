@@ -131,9 +131,11 @@ productionBatchSchema.virtual('duration').get(function() {
 productionBatchSchema.pre('save', async function(next) {
   if (!this.batchId) {
     const count = await this.constructor.countDocuments();
-    const plantCode = await mongoose.model('Plant').findById(this.plant).select('code');
-    const code = plantCode ? plantCode.code : 'PLANT';
-    this.batchId = `${code}-BATCH-${String(count + 1).padStart(4, '0')}`;
+    const plantDoc = await mongoose.model('Plant').findById(this.plant).select('name');
+    const prefix = plantDoc && plantDoc.name
+      ? plantDoc.name.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4) || 'PLANT'
+      : 'PLANT';
+    this.batchId = `${prefix}-BATCH-${String(count + 1).padStart(4, '0')}`;
   }
   next();
 });

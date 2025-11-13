@@ -97,7 +97,7 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
     
     // Get the source plant output
     const sourceOutput = await PlantOutput.findById(outputId)
-      .populate('plant', 'name code');
+      .populate('plant', 'name plantType');
     
     if (!sourceOutput) {
       return res.status(404).json({
@@ -200,8 +200,7 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
       quantity,
       fromPlant: {
         _id: sourceOutput.plant._id,
-        name: sourceOutput.plant.name,
-        code: sourceOutput.plant.code
+        name: sourceOutput.plant.name
       },
       destination: {
         type: destinationType,
@@ -645,6 +644,7 @@ router.get('/plant/:plantId', authenticateToken, requirePermission('plant_output
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .populate('dispatchedBy', 'firstName lastName email')
+      .populate('fromPlant', 'name plantType')
       .populate('receivedBy', 'firstName lastName email');
     
     const totalCount = await PlantOutputDispatch.countDocuments(query);
@@ -655,7 +655,7 @@ router.get('/plant/:plantId', authenticateToken, requirePermission('plant_output
         plant: {
           _id: plant._id,
           name: plant.name,
-          code: plant.code
+          plantType: plant.plantType
         },
         dispatches,
         pagination: {
@@ -694,7 +694,7 @@ router.get('/pending/:destinationType/:destinationId', authenticateToken, requir
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .populate('dispatchedBy', 'firstName lastName email')
-      .populate('fromPlant', 'name code');
+      .populate('fromPlant', 'name plantType');
     
     const totalCount = await PlantOutputDispatch.countDocuments(query);
     
@@ -746,7 +746,7 @@ router.get('/destination/:destinationType/:destinationId', authenticateToken, re
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
       .populate('dispatchedBy', 'firstName lastName email')
-      .populate('fromPlant', 'name code')
+      .populate('fromPlant', 'name plantType')
       .populate('receivedBy', 'firstName lastName email');
     
     const totalCount = await PlantOutputDispatch.countDocuments(query);

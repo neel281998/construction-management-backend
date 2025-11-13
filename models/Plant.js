@@ -8,13 +8,6 @@ const plantSchema = new mongoose.Schema({
     maxlength: [100, 'Plant name cannot exceed 100 characters']
     // unique removed - defined in index below to avoid duplicate
   },
-  code: {
-    type: String,
-    trim: true,
-    uppercase: true,
-    maxlength: [20, 'Plant code cannot exceed 20 characters'],
-    match: [/^[A-Z]{2,4}-\d{3}$/, 'Plant code must be in format XX-000 or XXX-000']
-  },
   plantType: {
     type: String,
     required: [true, 'Plant type is required'],
@@ -260,10 +253,6 @@ plantSchema.statics.getPlantsForManager = function(managerId) {
 
 // Index for performance
 plantSchema.index({ name: 1 }, { unique: true });
-plantSchema.index({ code: 1 });
 plantSchema.index({ plantType: 1 });
-plantSchema.index({ 'assignedManagers.manager': 1 });
-plantSchema.index({ isActive: 1 });
-plantSchema.index({ 'address.city': 1 });
 
 module.exports = mongoose.model('Plant', plantSchema);

@@ -279,7 +279,6 @@ router.post('/transfer', authenticateToken, requirePermission('inventory.update'
       toPlant: destinationPlant ? {
         _id: destinationPlant._id,
         name: destinationPlant.name,
-        code: destinationPlant.code,
         plantType: destinationPlant.plantType
       } : null,
       toConstructionSite: destinationConstructionSite ? {

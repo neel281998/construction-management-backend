@@ -88,7 +88,7 @@ router.get('/', authenticateToken, async (req, res) => {
     
     const [outputs, totalCount, lowStockCount] = await Promise.all([
       PlantOutput.find(query)
-        .populate('plant', 'name code plantType')
+        .populate('plant', 'name plantType')
         .populate('batch', 'batchId batchType startTime endTime')
         .populate('createdBy', 'name email')
         .sort({ productionDate: -1 })
@@ -131,7 +131,7 @@ router.get('/', authenticateToken, async (req, res) => {
 router.get('/:id', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
   try {
     const output = await PlantOutput.findById(req.params.id)
-      .populate('plant', 'name code plantType')
+      .populate('plant', 'name plantType')
       .populate('batch', 'batchId batchType startTime endTime consumedMaterials outputMaterials')
       .populate('createdBy', 'name email')
       .populate('transferHistory.transferredBy', 'name email')
@@ -254,7 +254,7 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
     
     // Populate the created output
     await output.populate([
-      { path: 'plant', select: 'name code plantType' },
+      { path: 'plant', select: 'name plantType' },
       { path: 'batch', select: 'batchId batchType startTime endTime' },
       { path: 'createdBy', select: 'name email' }
     ]);
@@ -306,7 +306,7 @@ router.put('/:id', authenticateToken, requirePermission('plant_inventory.update'
     
     // Populate the updated output
     await output.populate([
-      { path: 'plant', select: 'name code plantType' },
+      { path: 'plant', select: 'name plantType' },
       { path: 'batch', select: 'batchId batchType startTime endTime' },
       { path: 'createdBy', select: 'name email' }
     ]);
@@ -391,7 +391,7 @@ router.post('/:id/transfer', authenticateToken, requirePermission('plant_invento
     
     // Populate the updated output
     await output.populate([
-      { path: 'plant', select: 'name code plantType' },
+      { path: 'plant', select: 'name plantType' },
       { path: 'batch', select: 'batchId batchType startTime endTime' },
       { path: 'createdBy', select: 'name email' }
     ]);
