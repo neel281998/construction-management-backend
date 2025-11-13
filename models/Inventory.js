@@ -150,7 +150,34 @@ const inventorySchema = new mongoose.Schema({
       type: Number,
       required: false,
       min: [0, 'Cost cannot be negative']
-    }
+    },
+    attachments: [{
+      fileId: {
+        type: String,
+        required: false
+      },
+      filename: {
+        type: String,
+        required: false
+      },
+      mimeType: {
+        type: String,
+        required: false
+      },
+      size: {
+        type: Number,
+        required: false
+      },
+      uploadedAt: {
+        type: Date,
+        default: Date.now
+      },
+      uploadedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false
+      }
+    }]
   }],
   transferHistory: [{
     fromStorageSite: {
@@ -247,17 +274,19 @@ inventorySchema.virtual('stockPercentage').get(function() {
 
 
 // Method to restock item
-inventorySchema.methods.restock = function(quantity, supplier, restockedBy, notes = '', vehicle = null, cost = null) {
+inventorySchema.methods.restock = function(quantity, supplier, restockedBy, notes = '', vehicle = null, cost = null, attachments = []) {
   console.log('🔄 Restock method called with:', {
     quantity,
     supplier,
     restockedBy,
     notes,
     vehicle,
-    cost
+    cost,
+    attachments
   });
   
   // Add to restock history
+  const sanitizedAttachments = Array.isArray(attachments) ? attachments.filter(Boolean) : [];
   const restockEntry = {
     quantity,
     supplier,
@@ -266,6 +295,10 @@ inventorySchema.methods.restock = function(quantity, supplier, restockedBy, note
     vehicle,
     cost
   };
+  
+  if (sanitizedAttachments.length > 0) {
+    restockEntry.attachments = sanitizedAttachments;
+  }
   
   this.restockHistory.push(restockEntry);
   console.log('📝 Added restock entry:', restockEntry);

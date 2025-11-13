@@ -1,9 +1,106 @@
 const express = require('express');
+const multer = require('multer');
+const mongoose = require('mongoose');
+const { GridFSBucket } = require('mongodb');
 const Inventory = require('../models/Inventory');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const { logActivity, getActivityStyle } = require('../utils/activityLogger');
 
 const router = express.Router();
+
+const restockStorage = multer.memoryStorage();
+const allowedRestockMimeTypes = (process.env.RESTOCK_ALLOWED_MIME_TYPES || 'image/jpeg,image/png,image/webp,image/heic,image/heif').split(',');
+const restockUpload = multer({
+  storage: restockStorage,
+  limits: {
+    fileSize: parseInt(process.env.RESTOCK_ATTACHMENT_MAX_SIZE || process.env.MAX_FILE_SIZE || String(10 * 1024 * 1024), 10)
+  },
+  fileFilter: (req, file, cb) => {
+    if (allowedRestockMimeTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      req.fileValidationError = 'Unsupported file type. Please upload an image.';
+      cb(null, false);
+    }
+  }
+});
+
+let gfsBucket;
+mongoose.connection.once('open', () => {
+  gfsBucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'uploads' });
+});
+
+const uploadRestockAttachment = (file, userId) => {
+  if (!file) {
+    return Promise.resolve(null);
+  }
+
+  if (!gfsBucket) {
+    return Promise.reject(new Error('File storage bucket is not initialized'));
+  }
+
+  const uploadedAt = new Date();
+
+  return new Promise((resolve, reject) => {
+    const uploadStream = gfsBucket.openUploadStream(file.originalname, {
+      metadata: {
+        uploadedBy: userId,
+        uploadedAt,
+        category: 'inventory-restock',
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size
+      }
+    });
+
+    uploadStream.on('finish', () => {
+      resolve({
+        fileId: uploadStream.id.toString(),
+        filename: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        uploadedAt,
+        uploadedBy: userId
+      });
+    });
+
+    uploadStream.on('error', reject);
+    uploadStream.end(file.buffer);
+  });
+};
+
+const handleRestockUpload = (req, res, next) => {
+  restockUpload.single('attachment')(req, res, (err) => {
+    if (err) {
+      console.error('Restock attachment upload failed:', err);
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({
+            success: false,
+            message: 'Attachment exceeds the maximum allowed size'
+          });
+        }
+        return res.status(400).json({
+          success: false,
+          message: err.message || 'Invalid attachment upload'
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        message: 'Unexpected error while uploading attachment'
+      });
+    }
+
+    if (req.fileValidationError) {
+      return res.status(400).json({
+        success: false,
+        message: req.fileValidationError
+      });
+    }
+
+    return next();
+  });
+};
 
 // Get all inventory items
 router.get('/', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
@@ -329,26 +426,84 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
 });
 
 // Restock inventory item (specific route before /:id/restock)
-router.post('/restock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+router.post(
+  '/restock',
+  authenticateToken,
+  requirePermission('inventory.update'),
+  handleRestockUpload,
+  async (req, res) => {
   try {
-    const { itemId, quantity, supplier, notes, cost, vehicle } = req.body;
-    
+    const { itemId } = req.body;
+    let { supplier, notes } = req.body;
+    const rawQuantity = req.body.quantity;
+    const rawCost = req.body.cost;
+    let vehicle = req.body.vehicle;
+
+    if (vehicle && typeof vehicle === 'string') {
+      try {
+        vehicle = JSON.parse(vehicle);
+      } catch (error) {
+        console.error('Invalid vehicle payload for restock:', error);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid vehicle data format'
+        });
+      }
+    }
+
+    if (vehicle && vehicle.vehicleType && !vehicle.type) {
+      vehicle.type = vehicle.vehicleType;
+    }
+
+    const quantity = typeof rawQuantity === 'string' ? parseFloat(rawQuantity) : Number(rawQuantity);
+
+    let parsedCost;
+    if (rawCost !== undefined && rawCost !== null && rawCost !== '') {
+      parsedCost = typeof rawCost === 'string' ? parseFloat(rawCost) : Number(rawCost);
+      if (Number.isNaN(parsedCost) || parsedCost < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cost must be a valid positive number'
+        });
+      }
+    }
+
+    if (supplier) {
+      supplier = supplier.toString().trim();
+      if (!supplier.length) {
+        supplier = undefined;
+      }
+    }
+
+    if (notes) {
+      notes = notes.toString().trim();
+      if (!notes.length) {
+        notes = undefined;
+      }
+    }
+
+    if (!itemId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item ID is required'
+      });
+    }
+
+    if (Number.isNaN(quantity)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity is required'
+      });
+    }
     console.log('🚚 Restock request received:', {
       itemId,
       quantity,
       supplier,
       notes,
-      cost,
+      cost: parsedCost,
       vehicle
     });
-    
-    if (!itemId || !quantity) {
-      return res.status(400).json({
-        success: false,
-        message: 'Item ID and quantity are required'
-      });
-    }
-    
+
     if (quantity <= 0) {
       return res.status(400).json({
         success: false,
@@ -378,8 +533,34 @@ router.post('/restock', authenticateToken, requirePermission('inventory.update')
     
     const previousStock = item.currentStock;
     
+    const attachments = [];
+    if (req.file) {
+      try {
+        const attachmentRecord = await uploadRestockAttachment(req.file, req.user._id);
+        if (attachmentRecord) {
+          attachments.push(attachmentRecord);
+        }
+      } catch (uploadError) {
+        console.error('Failed to upload restock attachment:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Unable to upload restock attachment'
+        });
+      }
+    }
+
+    const supplierNameForHistory = supplier || item.supplier?.name || 'Unknown';
+
     // Use the restock method to properly add to history
-    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, cost);
+    await item.restock(
+      quantity,
+      supplierNameForHistory,
+      req.user._id,
+      notes,
+      vehicle,
+      parsedCost,
+      attachments
+    );
     
     // Update supplier if provided
     if (supplier) {
@@ -403,8 +584,8 @@ router.post('/restock', authenticateToken, requirePermission('inventory.update')
             item,
             {
               quantity,
-              supplier: supplier || item.supplier.name,
-              cost,
+              supplier: supplierNameForHistory,
+              cost: parsedCost,
               notes
             },
             req.user._id
@@ -465,7 +646,8 @@ router.post('/restock', authenticateToken, requirePermission('inventory.update')
         newStock: item.currentStock,
         unit: item.unit,
         restockedBy: req.user._id,
-        restockedAt: item.lastRestocked
+        restockedAt: item.lastRestocked,
+        attachments
       }
     });
     
