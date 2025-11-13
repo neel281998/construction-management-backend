@@ -194,7 +194,7 @@ router.delete('/main-storage/:id', authenticateToken, requirePermission('fuel.de
 // Restock main storage
 router.post('/main-storage/:id/restock', authenticateToken, requirePermission('fuel.restock'), async (req, res) => {
   try {
-    const { quantity, scaleReading, image, source, costPerLiter, notes } = req.body;
+    const { quantity, scaleReading, image, source, notes } = req.body;
     
     const mainStorage = await MainStorage.findById(req.params.id);
     if (!mainStorage) {
@@ -230,7 +230,6 @@ router.post('/main-storage/:id/restock', authenticateToken, requirePermission('f
       image,
       source,
       operator: req.user._id,
-      costPerLiter,
       notes
     };
 
@@ -249,8 +248,7 @@ router.post('/main-storage/:id/restock', authenticateToken, requirePermission('f
       entityName: mainStorage.name,
       metadata: {
         quantity,
-        scaleReading,
-        totalCost: restock.totalCost
+        scaleReading
       },
       ...getActivityStyle('fuel_main_storage_restocked'),
       req
@@ -535,7 +533,7 @@ router.delete('/sub-pumps/:id', authenticateToken, requirePermission('fuel.delet
 // Restock sub pump
 router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel.restock'), async (req, res) => {
   try {
-    const { quantity, scaleReading, image, source, costPerLiter, notes } = req.body;
+    const { quantity, scaleReading, image, source, notes } = req.body;
     
     const subPump = await SubPump.findById(req.params.id);
     if (!subPump) {
@@ -571,7 +569,6 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
       image,
       source,
       operator: req.user._id,
-      costPerLiter,
       notes
     };
 
@@ -591,8 +588,7 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
       metadata: {
         quantity,
         scaleReading,
-        source,
-        totalCost: restock.totalCost
+        source
       },
       ...getActivityStyle('fuel_sub_pump_restocked'),
       req
@@ -706,8 +702,7 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
       odometerType,
       operator,
       shift,
-      notes,
-      costPerLiter
+      notes
     } = req.body;
 
     // Validate vehicle exists
@@ -760,7 +755,6 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
       operator,
       shift,
       notes,
-      costPerLiter,
       previousOdometer: previousRefueling ? previousRefueling.odometerReading : previousOdometer
     };
 
