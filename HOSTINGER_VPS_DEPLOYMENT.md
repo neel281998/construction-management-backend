@@ -185,8 +185,14 @@ EMAIL_PORT=587
 EMAIL_USER=your_email@gmail.com
 EMAIL_PASS=your_app_password
 
-# Frontend URL (for CORS)
-FRONTEND_URL=https://your-frontend-domain.com
+# Frontend URL (for CORS) - Where your frontend/mobile app is hosted
+# This is where your app makes API calls FROM (not where the backend is)
+FRONTEND_URL=https://your-frontend-domain.vercel.app
+
+# Backend URL (optional) - Your backend domain or VPS IP
+# Use your domain if you have one: https://api.yourdomain.com
+# Or use your VPS IP: http://123.45.67.89
+BACKEND_URL=https://api.yourdomain.com
 
 # Server Configuration
 PORT=5000
@@ -194,9 +200,13 @@ NODE_ENV=production
 ```
 
 **Important:** 
+- **FRONTEND_URL**: Where your frontend/mobile app is hosted (e.g., Vercel, Netlify, or your domain)
+- **BACKEND_URL**: Your backend domain (if you have one) or VPS IP address (optional)
 - Replace `MONGODB_URI` with your actual MongoDB connection string
 - Generate a strong `JWT_SECRET` (you can use: `openssl rand -base64 32`)
 - Save and exit: `Ctrl+X`, then `Y`, then `Enter`
+
+**Note:** If you don't have a domain yet, you can use your VPS IP for `BACKEND_URL` or leave it empty. The backend will work either way.
 
 ### 7.3 Secure the .env File
 ```bash

@@ -143,3 +143,4 @@ echo "7. Configure Nginx reverse proxy (see HOSTINGER_VPS_DEPLOYMENT.md)"
 echo ""
 echo "For detailed instructions, see: HOSTINGER_VPS_DEPLOYMENT.md"
 
+
