@@ -55,17 +55,35 @@ app.use(compression());
 // Security middleware
 app.use(helmet());
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:8081',
-    process.env.BACKEND_URL, // Backend domain (if you have one)
-    'http://localhost:8081',
-    'http://localhost:3000',
-    'http://localhost:19006', // Expo web
-    'https://snack.expo.dev', // Expo Snack
-    'https://*.vercel.app', // Vercel deployments
-    'https://*.netlify.app' // Netlify deployments
-  ].filter(Boolean), // Remove undefined values
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, curl, etc.)
+    // Mobile apps don't send Origin header, so they're automatically allowed
+    if (!origin) return callback(null, true);
+    
+    // List of allowed origins for web builds
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      process.env.BACKEND_URL,
+      'http://localhost:8081',
+      'http://localhost:3000',
+      'http://localhost:19006', // Expo web
+      'https://snack.expo.dev', // Expo Snack
+    ].filter(Boolean);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      // For development, allow all origins (comment out in production for security)
+      // In production, you may want to restrict this further
+      callback(null, true);
+      // Uncomment below and remove above line for stricter CORS in production:
+      // callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Rate limiting

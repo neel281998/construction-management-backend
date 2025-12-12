@@ -132,7 +132,7 @@ mkdir -p ~/app
 cd ~/app
 
 # Clone your repository (replace with your repo URL)
-git clone https://github.com/yourusername/your-repo.git backend
+git clone https://github.com/neel281998/construction-management-backend backend
 cd backend
 
 # Or if backend is in a subdirectory
