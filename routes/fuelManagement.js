@@ -543,15 +543,17 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
       });
     }
 
-    // Check if restocking from main storage
+    // Sub pumps always get fuel from main storage (unless explicitly marked as external source)
     let mainStorage = null;
-    const isFromMainStorage = source && (
-      source.toLowerCase().includes('main') || 
-      source === 'MainStorage' ||
-      mainStorageId
+    const isExternalSource = source && (
+      source.toLowerCase().includes('supplier') ||
+      source.toLowerCase().includes('external') ||
+      source.toLowerCase().includes('vendor') ||
+      source.toLowerCase().includes('direct')
     );
 
-    if (isFromMainStorage) {
+    // Only skip main storage decrement if explicitly marked as external source
+    if (!isExternalSource) {
       // Find main storage - use mainStorageId if provided, otherwise find first active main storage
       if (mainStorageId) {
         mainStorage = await MainStorage.findById(mainStorageId);
@@ -562,7 +564,7 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
       if (!mainStorage) {
         return res.status(404).json({
           success: false,
-          message: 'Main storage not found'
+          message: 'Main storage not found. Sub pumps must be restocked from main storage.'
         });
       }
 
@@ -1081,4 +1083,5 @@ router.get('/dashboard', authenticateToken, requirePermission('fuel.read'), asyn
 });
 
 module.exports = router;
+
 
