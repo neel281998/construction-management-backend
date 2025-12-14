@@ -28,10 +28,17 @@ router.get('/', authenticateToken, requirePermission('site.read'), cacheMiddlewa
     
     // Role-based filtering
     if (req.user.role !== 'admin') {
-      query.$or = [
+      const filterConditions = [
         { siteManager: req.user._id },
         { 'assignedStaff.user': req.user._id }
       ];
+      
+      // For supervisors, also check assignedSites field
+      if (req.user.role === 'supervisor' && req.user.assignedSites && req.user.assignedSites.length > 0) {
+        filterConditions.push({ _id: { $in: req.user.assignedSites } });
+      }
+      
+      query.$or = filterConditions;
     }
     
     // Apply filters

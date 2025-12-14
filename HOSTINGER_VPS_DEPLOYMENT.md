@@ -250,6 +250,56 @@ curl http://localhost:5000/api/health
 
 ---
 
+## 🌐 Step 9: Configure Domain DNS (IMPORTANT - Do This First!)
+
+**⚠️ Before configuring Nginx, you MUST set up DNS records so your domain points to your VPS IP.**
+
+### 9.0 Configure DNS Records in Hostinger
+
+1. **Log in to Hostinger Control Panel**
+   - Go to [hpanel.hostinger.com](https://hpanel.hostinger.com)
+   - Navigate to **Domains** → **DNS / Zone Editor**
+
+2. **Add DNS Records**
+   - Find your domain `chaudharyconstruction.cloud`
+   - Add/Edit the following records:
+
+   **A Record (Main Domain):**
+   ```
+   Type: A
+   Name: @ (or leave blank)
+   Points to: 72.61.225.39
+   TTL: 3600 (or default)
+   ```
+
+   **A Record (WWW Subdomain):**
+   ```
+   Type: A
+   Name: www
+   Points to: 72.61.225.39
+   TTL: 3600 (or default)
+   ```
+
+3. **Wait for DNS Propagation**
+   - DNS changes can take 5 minutes to 48 hours
+   - Check if DNS is propagated:
+     ```bash
+     # On your local machine
+     nslookup chaudharyconstruction.cloud
+     # or
+     dig chaudharyconstruction.cloud
+     ```
+   - The result should show `72.61.225.39`
+
+4. **Verify DNS is Working**
+   ```bash
+   # On your VPS, test if domain resolves
+   ping chaudharyconstruction.cloud
+   # Should show your VPS IP
+   ```
+
+---
+
 ## 🌐 Step 9: Install and Configure Nginx
 
 ### 9.1 Install Nginx
@@ -263,11 +313,14 @@ sudo yum install nginx -y  # CentOS/RHEL
 sudo nano /etc/nginx/sites-available/construction-backend
 ```
 
-**For Ubuntu/Debian**, add this configuration:
+**For Ubuntu/Debian**, add this configuration (replace `chaudharyconstruction.cloud` with your actual domain):
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com www.your-domain.com;  # Replace with your domain or IP
+    server_name chaudharyconstruction.cloud www.chaudharyconstruction.cloud;  # Your actual domain
+
+    # Increase client body size for file uploads
+    client_max_body_size 10M;
 
     location / {
         proxy_pass http://localhost:5000;
@@ -343,8 +396,14 @@ sudo yum install certbot python3-certbot-nginx -y
 
 ### 11.2 Obtain SSL Certificate
 ```bash
-sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+# Replace with your actual domain
+sudo certbot --nginx -d chaudharyconstruction.cloud -d www.chaudharyconstruction.cloud
 ```
+
+**Important Notes:**
+- DNS must be properly configured before running Certbot
+- Certbot will automatically modify your Nginx configuration to add SSL
+- Choose option 2 (Redirect HTTP to HTTPS) when prompted
 
 Follow the prompts:
 - Enter your email address

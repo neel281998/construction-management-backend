@@ -533,7 +533,7 @@ router.delete('/sub-pumps/:id', authenticateToken, requirePermission('fuel.delet
 // Restock sub pump
 router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel.restock'), async (req, res) => {
   try {
-    const { quantity, scaleReading, image, source, notes } = req.body;
+    const { quantity, scaleReading, image, source, notes, mainStorageId } = req.body;
     
     const subPump = await SubPump.findById(req.params.id);
     if (!subPump) {
@@ -541,6 +541,59 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
         success: false,
         message: 'Sub pump not found'
       });
+    }
+
+    // Check if restocking from main storage
+    let mainStorage = null;
+    const isFromMainStorage = source && (
+      source.toLowerCase().includes('main') || 
+      source === 'MainStorage' ||
+      mainStorageId
+    );
+
+    if (isFromMainStorage) {
+      // Find main storage - use mainStorageId if provided, otherwise find first active main storage
+      if (mainStorageId) {
+        mainStorage = await MainStorage.findById(mainStorageId);
+      } else {
+        mainStorage = await MainStorage.findOne({ isActive: true });
+      }
+
+      if (!mainStorage) {
+        return res.status(404).json({
+          success: false,
+          message: 'Main storage not found'
+        });
+      }
+
+      // Check if main storage has enough fuel
+      if (mainStorage.currentFuelLevel < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient fuel in main storage. Available: ${mainStorage.currentFuelLevel}L, Required: ${quantity}L`
+        });
+      }
+
+      // Decrement main storage fuel level
+      mainStorage.currentFuelLevel -= quantity;
+      
+      // Update main storage current reading if it exists
+      if (mainStorage.currentReading && mainStorage.currentReading.value) {
+        // Calculate new reading based on fuel level (assuming linear relationship)
+        // This is a simplified calculation - adjust based on your actual scale reading logic
+        const fuelLevelRatio = mainStorage.currentFuelLevel / mainStorage.totalCapacity;
+        if (mainStorage.scaleType === 'mm') {
+          // For mm scale, you might need to adjust this calculation based on your tank dimensions
+          // For now, we'll just update the value proportionally
+          const previousReading = mainStorage.currentReading.value;
+          const readingDecrease = (quantity / mainStorage.totalCapacity) * previousReading;
+          mainStorage.currentReading.value = Math.max(0, previousReading - readingDecrease);
+        }
+        mainStorage.currentReading.date = new Date();
+      }
+
+      // Save the updated main storage
+      await mainStorage.save();
     }
 
     // Update sub pump fuel level
@@ -576,19 +629,26 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
     await restock.save();
 
     // Log activity
+    const activityMessage = mainStorage 
+      ? `${quantity}L transferred from ${mainStorage.name} to ${subPump.name}`
+      : `${quantity}L added to ${subPump.name}`;
+    
     await logActivity({
       user: req.user,
       action: 'fuel_sub_pump_restocked',
       category: 'fuel',
       title: 'Sub Pump Restocked',
-      message: `${quantity}L added to ${subPump.name}`,
+      message: activityMessage,
       entityType: 'sub_pump',
       entityId: subPump._id,
       entityName: subPump.name,
       metadata: {
         quantity,
         scaleReading,
-        source
+        source,
+        fromMainStorage: !!mainStorage,
+        mainStorageId: mainStorage ? mainStorage._id : null,
+        mainStorageName: mainStorage ? mainStorage.name : null
       },
       ...getActivityStyle('fuel_sub_pump_restocked'),
       req
@@ -596,8 +656,18 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
 
     res.status(201).json({
       success: true,
-      message: 'Sub pump restocked successfully',
-      data: { restock, subPump }
+      message: mainStorage 
+        ? `Sub pump restocked successfully. ${quantity}L transferred from ${mainStorage.name}`
+        : 'Sub pump restocked successfully',
+      data: { 
+        restock, 
+        subPump,
+        mainStorage: mainStorage ? {
+          _id: mainStorage._id,
+          name: mainStorage.name,
+          currentFuelLevel: mainStorage.currentFuelLevel
+        } : null
+      }
     });
   } catch (error) {
     console.error('Restock sub pump error:', error);

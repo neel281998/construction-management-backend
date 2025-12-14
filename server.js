@@ -68,6 +68,9 @@ app.use(cors({
       'http://localhost:3000',
       'http://localhost:19006', // Expo web
       'https://snack.expo.dev', // Expo Snack
+      // Add your domain here after DNS setup:
+      // 'http://api.yourdomain.com',
+      // 'https://api.yourdomain.com', // After SSL setup
     ].filter(Boolean);
     
     // Check if origin is in allowed list
