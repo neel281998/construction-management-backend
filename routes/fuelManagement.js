@@ -204,6 +204,16 @@ router.post('/main-storage/:id/restock', authenticateToken, requirePermission('f
       });
     }
 
+    // Check if restock would exceed total capacity
+    const newFuelLevel = mainStorage.currentFuelLevel + quantity;
+    if (newFuelLevel > mainStorage.totalCapacity) {
+      const availableCapacity = mainStorage.totalCapacity - mainStorage.currentFuelLevel;
+      return res.status(400).json({
+        success: false,
+        message: `Restock quantity exceeds total capacity. Current: ${mainStorage.currentFuelLevel}L, Capacity: ${mainStorage.totalCapacity}L, Available: ${availableCapacity}L, Requested: ${quantity}L`
+      });
+    }
+
     // Update main storage fuel level
     mainStorage.totalAdded += quantity;
     mainStorage.currentFuelLevel += quantity; // Add the restocked quantity to current fuel level
@@ -596,6 +606,16 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
 
       // Save the updated main storage
       await mainStorage.save();
+    }
+
+    // Check if restock would exceed total capacity
+    const newFuelLevel = subPump.currentFuelLevel + quantity;
+    if (newFuelLevel > subPump.totalCapacity) {
+      const availableCapacity = subPump.totalCapacity - subPump.currentFuelLevel;
+      return res.status(400).json({
+        success: false,
+        message: `Restock quantity exceeds total capacity. Current: ${subPump.currentFuelLevel}L, Capacity: ${subPump.totalCapacity}L, Available: ${availableCapacity}L, Requested: ${quantity}L`
+      });
     }
 
     // Update sub pump fuel level

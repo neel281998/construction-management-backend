@@ -67,3 +67,4 @@ echo "   pm2 logs construction-backend"
 echo ""
 echo "🧪 Test your API:"
 echo "   curl http://localhost:5000/api/health"
+
