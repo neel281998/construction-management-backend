@@ -204,16 +204,6 @@ router.post('/main-storage/:id/restock', authenticateToken, requirePermission('f
       });
     }
 
-    // Check if restock would exceed total capacity
-    const newFuelLevel = mainStorage.currentFuelLevel + quantity;
-    if (newFuelLevel > mainStorage.totalCapacity) {
-      const availableCapacity = mainStorage.totalCapacity - mainStorage.currentFuelLevel;
-      return res.status(400).json({
-        success: false,
-        message: `Restock quantity exceeds total capacity. Current: ${mainStorage.currentFuelLevel}L, Capacity: ${mainStorage.totalCapacity}L, Available: ${availableCapacity}L, Requested: ${quantity}L`
-      });
-    }
-
     // Update main storage fuel level
     mainStorage.totalAdded += quantity;
     mainStorage.currentFuelLevel += quantity; // Add the restocked quantity to current fuel level
@@ -543,78 +533,13 @@ router.delete('/sub-pumps/:id', authenticateToken, requirePermission('fuel.delet
 // Restock sub pump
 router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel.restock'), async (req, res) => {
   try {
-    const { quantity, scaleReading, image, source, notes, mainStorageId } = req.body;
+    const { quantity, scaleReading, image, source, notes } = req.body;
     
     const subPump = await SubPump.findById(req.params.id);
     if (!subPump) {
       return res.status(404).json({
         success: false,
         message: 'Sub pump not found'
-      });
-    }
-
-    // Sub pumps always get fuel from main storage (unless explicitly marked as external source)
-    let mainStorage = null;
-    const isExternalSource = source && (
-      source.toLowerCase().includes('supplier') ||
-      source.toLowerCase().includes('external') ||
-      source.toLowerCase().includes('vendor') ||
-      source.toLowerCase().includes('direct')
-    );
-
-    // Only skip main storage decrement if explicitly marked as external source
-    if (!isExternalSource) {
-      // Find main storage - use mainStorageId if provided, otherwise find first active main storage
-      if (mainStorageId) {
-        mainStorage = await MainStorage.findById(mainStorageId);
-      } else {
-        mainStorage = await MainStorage.findOne({ isActive: true });
-      }
-
-      if (!mainStorage) {
-        return res.status(404).json({
-          success: false,
-          message: 'Main storage not found. Sub pumps must be restocked from main storage.'
-        });
-      }
-
-      // Check if main storage has enough fuel
-      if (mainStorage.currentFuelLevel < quantity) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient fuel in main storage. Available: ${mainStorage.currentFuelLevel}L, Required: ${quantity}L`
-        });
-      }
-
-      // Decrement main storage fuel level
-      mainStorage.currentFuelLevel -= quantity;
-      
-      // Update main storage current reading if it exists
-      if (mainStorage.currentReading && mainStorage.currentReading.value) {
-        // Calculate new reading based on fuel level (assuming linear relationship)
-        // This is a simplified calculation - adjust based on your actual scale reading logic
-        const fuelLevelRatio = mainStorage.currentFuelLevel / mainStorage.totalCapacity;
-        if (mainStorage.scaleType === 'mm') {
-          // For mm scale, you might need to adjust this calculation based on your tank dimensions
-          // For now, we'll just update the value proportionally
-          const previousReading = mainStorage.currentReading.value;
-          const readingDecrease = (quantity / mainStorage.totalCapacity) * previousReading;
-          mainStorage.currentReading.value = Math.max(0, previousReading - readingDecrease);
-        }
-        mainStorage.currentReading.date = new Date();
-      }
-
-      // Save the updated main storage
-      await mainStorage.save();
-    }
-
-    // Check if restock would exceed total capacity
-    const newFuelLevel = subPump.currentFuelLevel + quantity;
-    if (newFuelLevel > subPump.totalCapacity) {
-      const availableCapacity = subPump.totalCapacity - subPump.currentFuelLevel;
-      return res.status(400).json({
-        success: false,
-        message: `Restock quantity exceeds total capacity. Current: ${subPump.currentFuelLevel}L, Capacity: ${subPump.totalCapacity}L, Available: ${availableCapacity}L, Requested: ${quantity}L`
       });
     }
 
@@ -651,26 +576,19 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
     await restock.save();
 
     // Log activity
-    const activityMessage = mainStorage 
-      ? `${quantity}L transferred from ${mainStorage.name} to ${subPump.name}`
-      : `${quantity}L added to ${subPump.name}`;
-    
     await logActivity({
       user: req.user,
       action: 'fuel_sub_pump_restocked',
       category: 'fuel',
       title: 'Sub Pump Restocked',
-      message: activityMessage,
+      message: `${quantity}L added to ${subPump.name}`,
       entityType: 'sub_pump',
       entityId: subPump._id,
       entityName: subPump.name,
       metadata: {
         quantity,
         scaleReading,
-        source,
-        fromMainStorage: !!mainStorage,
-        mainStorageId: mainStorage ? mainStorage._id : null,
-        mainStorageName: mainStorage ? mainStorage.name : null
+        source
       },
       ...getActivityStyle('fuel_sub_pump_restocked'),
       req
@@ -678,18 +596,8 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
 
     res.status(201).json({
       success: true,
-      message: mainStorage 
-        ? `Sub pump restocked successfully. ${quantity}L transferred from ${mainStorage.name}`
-        : 'Sub pump restocked successfully',
-      data: { 
-        restock, 
-        subPump,
-        mainStorage: mainStorage ? {
-          _id: mainStorage._id,
-          name: mainStorage.name,
-          currentFuelLevel: mainStorage.currentFuelLevel
-        } : null
-      }
+      message: 'Sub pump restocked successfully',
+      data: { restock, subPump }
     });
   } catch (error) {
     console.error('Restock sub pump error:', error);
@@ -1063,7 +971,24 @@ router.get('/dashboard', authenticateToken, requirePermission('fuel.read'), asyn
       .populate('vehicleId', 'vehicleNumber type')
       .populate('pumpId', 'name')
       .sort({ date: -1 })
-      .limit(10);
+      .limit(10)
+      .lean();
+
+    // Get recent restocks
+    const recentRestocks = await FuelRestock.find()
+      .populate('storageId', 'name location')
+      .populate('operator', 'firstName lastName')
+      .sort({ date: -1 })
+      .limit(10)
+      .lean();
+
+    // Combine and sort by date (most recent first)
+    const recentActivities = [
+      ...recentRefuelings.map(item => ({ ...item, activityType: 'refueling' })),
+      ...recentRestocks.map(item => ({ ...item, activityType: 'restock' }))
+    ]
+      .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
+      .slice(0, 10);
 
     // Get today's daily readings
     const today = new Date();
@@ -1089,7 +1014,7 @@ router.get('/dashboard', authenticateToken, requirePermission('fuel.read'), asyn
             utilization: totalSubCapacity > 0 ? Math.round((totalSubFuel / totalSubCapacity) * 100) : 0
           }
         },
-        recentRefuelings,
+        recentRefuelings: recentActivities,
         todayReadings
       }
     });
@@ -1103,5 +1028,3 @@ router.get('/dashboard', authenticateToken, requirePermission('fuel.read'), asyn
 });
 
 module.exports = router;
-
-
