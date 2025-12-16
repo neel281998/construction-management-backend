@@ -61,8 +61,10 @@ router.get('/main-storage/:id', authenticateToken, requirePermission('fuel.read'
 // Create main storage
 router.post('/main-storage', authenticateToken, requirePermission('fuel.create'), async (req, res) => {
   try {
+    const { initialPumpReading, initialPumpReadingImage, ...restBody } = req.body;
+    
     const mainStorageData = {
-      ...req.body,
+      ...restBody,
       currentFuelLevel: req.body.initialFuelLevel || 0,
       totalDispensed: 0,
       totalAdded: 0
@@ -71,6 +73,38 @@ router.post('/main-storage', authenticateToken, requirePermission('fuel.create')
     const mainStorage = new MainStorage(mainStorageData);
     await mainStorage.save();
     await mainStorage.populate('manager', 'firstName lastName email');
+
+    // If initial pump reading is provided, create the first daily reading (opening reading)
+    if (initialPumpReading !== undefined && initialPumpReading !== null && initialPumpReadingImage) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const dailyReading = new DailyReading({
+        storageType: 'main',
+        storageId: mainStorage._id,
+        storageTypeModel: 'MainStorage',
+        date: today,
+        openingReading: {
+          value: parseFloat(initialPumpReading), // in liters
+          image: initialPumpReadingImage,
+          timestamp: new Date()
+        },
+        operator: req.user._id,
+        fuelConsumed: 0,
+        isComplete: false
+      });
+      
+      await dailyReading.save();
+      
+      // Update main storage's current reading to match the initial pump reading
+      mainStorage.currentReading = {
+        value: parseFloat(initialPumpReading),
+        image: initialPumpReadingImage,
+        date: new Date()
+      };
+      mainStorage.currentFuelLevel = parseFloat(initialPumpReading);
+      await mainStorage.save();
+    }
 
     // Log activity
     await logActivity({
@@ -85,7 +119,8 @@ router.post('/main-storage', authenticateToken, requirePermission('fuel.create')
       metadata: {
         location: mainStorage.location,
         capacity: mainStorage.totalCapacity,
-        scaleType: mainStorage.scaleType
+        scaleType: mainStorage.scaleType,
+        hasInitialReading: !!initialPumpReading
       },
       ...getActivityStyle('fuel_main_storage_created'),
       req
@@ -401,8 +436,10 @@ router.get('/sub-pumps/:id', authenticateToken, requirePermission('fuel.read'), 
 // Create sub pump
 router.post('/sub-pumps', authenticateToken, requirePermission('fuel.create'), async (req, res) => {
   try {
+    const { initialPumpReading, initialPumpReadingImage, ...restBody } = req.body;
+    
     const subPumpData = {
-      ...req.body,
+      ...restBody,
       currentFuelLevel: req.body.initialFuelLevel || 0,
       totalDispensed: 0,
       totalAdded: 0
@@ -411,6 +448,38 @@ router.post('/sub-pumps', authenticateToken, requirePermission('fuel.create'), a
     const subPump = new SubPump(subPumpData);
     await subPump.save();
     await subPump.populate('manager', 'firstName lastName email');
+
+    // If initial pump reading is provided, create the first daily reading (opening reading)
+    if (initialPumpReading !== undefined && initialPumpReading !== null && initialPumpReadingImage) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const dailyReading = new DailyReading({
+        storageType: 'sub',
+        storageId: subPump._id,
+        storageTypeModel: 'SubPump',
+        date: today,
+        openingReading: {
+          value: parseFloat(initialPumpReading), // in liters
+          image: initialPumpReadingImage,
+          timestamp: new Date()
+        },
+        operator: req.user._id,
+        fuelConsumed: 0,
+        isComplete: false
+      });
+      
+      await dailyReading.save();
+      
+      // Update sub pump's current reading to match the initial pump reading
+      subPump.currentReading = {
+        value: parseFloat(initialPumpReading),
+        image: initialPumpReadingImage,
+        date: new Date()
+      };
+      subPump.currentFuelLevel = parseFloat(initialPumpReading);
+      await subPump.save();
+    }
 
     // Log activity
     await logActivity({
@@ -424,7 +493,8 @@ router.post('/sub-pumps', authenticateToken, requirePermission('fuel.create'), a
       entityName: subPump.name,
       metadata: {
         location: subPump.location,
-        capacity: subPump.totalCapacity
+        capacity: subPump.totalCapacity,
+        hasInitialReading: !!initialPumpReading
       },
       ...getActivityStyle('fuel_sub_pump_created'),
       req
