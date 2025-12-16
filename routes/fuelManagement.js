@@ -969,6 +969,53 @@ router.get('/refuel-history', authenticateToken, requirePermission('fuel.read'),
   }
 });
 
+// Get fuel restock history (for main storage and sub pumps)
+router.get('/restock-history', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, storageType, storageId, startDate, endDate } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const filter = {};
+    if (storageType) filter.storageType = storageType; // 'main' or 'sub'
+    if (storageId) filter.storageId = storageId;
+
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = new Date(startDate);
+      if (endDate) filter.date.$lte = new Date(endDate);
+    }
+
+    const restocks = await FuelRestock.find(filter)
+      .populate('storageId', 'name location')
+      .populate('operator', 'firstName lastName')
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await FuelRestock.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        restocks,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalCount: total,
+          hasNext: skip + restocks.length < total,
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get restock history error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch restock history'
+    });
+  }
+});
+
 // Get vehicle refueling history
 router.get('/refuel-history/:vehicleId', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
   try {
@@ -1076,11 +1123,15 @@ router.get('/dashboard', authenticateToken, requirePermission('fuel.read'), asyn
       .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
       .slice(0, 10);
 
-    // Get today's daily readings
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get daily readings for a specific date (defaults to today)
+    const { date } = req.query;
+    let targetDate = date ? new Date(date) : new Date();
+    // Normalize to start of day in server timezone
+    targetDate.setHours(0, 0, 0, 0);
+    const nextDay = new Date(targetDate.getTime() + 24 * 60 * 60 * 1000);
+
     const todayReadings = await DailyReading.find({
-      date: { $gte: today, $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) }
+      date: { $gte: targetDate, $lt: nextDay }
     }).populate('storageId', 'name');
 
     res.json({
