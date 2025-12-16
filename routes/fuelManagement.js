@@ -75,6 +75,7 @@ router.post('/main-storage', authenticateToken, requirePermission('fuel.create')
     await mainStorage.populate('manager', 'firstName lastName email');
 
     // If initial pump reading is provided, create the first daily reading (opening reading)
+    // NOTE: This should NOT change the storage's current fuel level, which is driven by initialFuelLevel
     if (initialPumpReading !== undefined && initialPumpReading !== null && initialPumpReadingImage) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -95,15 +96,6 @@ router.post('/main-storage', authenticateToken, requirePermission('fuel.create')
       });
       
       await dailyReading.save();
-      
-      // Update main storage's current reading to match the initial pump reading
-      mainStorage.currentReading = {
-        value: parseFloat(initialPumpReading),
-        image: initialPumpReadingImage,
-        date: new Date()
-      };
-      mainStorage.currentFuelLevel = parseFloat(initialPumpReading);
-      await mainStorage.save();
     }
 
     // Log activity
@@ -450,6 +442,7 @@ router.post('/sub-pumps', authenticateToken, requirePermission('fuel.create'), a
     await subPump.populate('manager', 'firstName lastName email');
 
     // If initial pump reading is provided, create the first daily reading (opening reading)
+    // NOTE: This should NOT change the pump's current fuel level, which is driven by initialFuelLevel
     if (initialPumpReading !== undefined && initialPumpReading !== null && initialPumpReadingImage) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -470,15 +463,6 @@ router.post('/sub-pumps', authenticateToken, requirePermission('fuel.create'), a
       });
       
       await dailyReading.save();
-      
-      // Update sub pump's current reading to match the initial pump reading
-      subPump.currentReading = {
-        value: parseFloat(initialPumpReading),
-        image: initialPumpReadingImage,
-        date: new Date()
-      };
-      subPump.currentFuelLevel = parseFloat(initialPumpReading);
-      await subPump.save();
     }
 
     // Log activity
