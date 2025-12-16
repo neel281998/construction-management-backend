@@ -60,17 +60,28 @@ async function fixAllUserPermissions() {
         'report.generate' // Can generate step reports
       ],
       plant_manager: [
-        'plant.read', 'plant.update', // Can read and update assigned plants
-        'plant_inventory.read', 'plant_inventory.update',
-        'plant_output.read', 'plant_output.update',
-        'site.read', // Can read sites to manage plants
+        'plant.read', 'plant.update',
+        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
+        'plant_output.create', 'plant_output.read', 'plant_output.update',
+        'inventory.read', 'inventory.update',
+        'fuel.read', 'fuel.refuel',
         'report.generate'
       ],
       plant_operator: [
-        'plant.read', // Can read assigned plants
+        'plant.read',
         'plant_inventory.read', 'plant_inventory.update',
         'plant_output.create', 'plant_output.read', 'plant_output.update',
-        'site.read', // Can read sites
+        'site.read',
+        'report.generate'
+      ],
+      fuel_main_manager: [
+        'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+        'vehicle.read',
+        'report.generate'
+      ],
+      fuel_sub_manager: [
+        'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+        'vehicle.read',
         'report.generate'
       ]
     };

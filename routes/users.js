@@ -601,9 +601,10 @@ router.post('/fix-all-permissions', authenticateToken, requireAdmin, async (req,
       ],
       plant_manager: [
         'plant.read', 'plant.update',
-        'plant_inventory.read', 'plant_inventory.update',
-        'plant_output.read', 'plant_output.update',
-        'site.read',
+        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
+        'plant_output.create', 'plant_output.read', 'plant_output.update',
+        'inventory.read', 'inventory.update',
+        'fuel.read', 'fuel.refuel',
         'report.generate'
       ],
       plant_operator: [
@@ -611,6 +612,16 @@ router.post('/fix-all-permissions', authenticateToken, requireAdmin, async (req,
         'plant_inventory.read', 'plant_inventory.update',
         'plant_output.create', 'plant_output.read', 'plant_output.update',
         'site.read',
+        'report.generate'
+      ],
+      fuel_main_manager: [
+        'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+        'vehicle.read',
+        'report.generate'
+      ],
+      fuel_sub_manager: [
+        'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+        'vehicle.read',
         'report.generate'
       ]
     };
@@ -671,6 +682,115 @@ router.post('/fix-all-permissions', authenticateToken, requireAdmin, async (req,
     res.status(500).json({
       success: false,
       message: 'Failed to fix all user permissions',
+      error: error.message
+    });
+  }
+});
+
+// Refresh current user's permissions based on their role
+router.post('/refresh-my-permissions', authenticateToken, async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Define role permissions (same as in User.js)
+    const rolePermissions = {
+      admin: [
+        'user.create', 'user.read', 'user.update', 'user.delete',
+        'site.create', 'site.read', 'site.update', 'site.delete',
+        'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
+        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+        'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
+        'plant.create', 'plant.read', 'plant.update', 'plant.delete',
+        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
+        'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+        'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+        'attendance.read', 'attendance.approve',
+        'report.generate', 'report.export'
+      ],
+      site_manager: [
+        'site.read', 'site.update',
+        'attendance.read', 'attendance.approve',
+        'report.generate'
+      ],
+      supervisor: [
+        'user.create', 'user.read',
+        'site.create', 'site.read',
+        'vehicle.create', 'vehicle.read',
+        'inventory.create', 'inventory.read',
+        'attendance.read', 'attendance.approve',
+        'report.generate'
+      ],
+      worker: [
+        'site.read',
+        'attendance.create', 'attendance.read'
+      ],
+      inventory_manager: [
+        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+        'storage_site.read', 'storage_site.update',
+        'report.generate'
+      ],
+      inventory_assistant: [
+        'inventory.read', 'inventory.update',
+        'storage_site.read'
+      ],
+      step_manager: [
+        'step.create', 'step.read', 'step.update', 'step.delete',
+        'site.read',
+        'user.read',
+        'report.generate'
+      ],
+      plant_manager: [
+        'plant.read', 'plant.update',
+        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
+        'plant_output.create', 'plant_output.read', 'plant_output.update',
+        'inventory.read', 'inventory.update',
+        'fuel.read', 'fuel.refuel',
+        'report.generate'
+      ],
+      plant_operator: [
+        'plant.read',
+        'plant_inventory.read', 'plant_inventory.update',
+        'plant_output.create', 'plant_output.read', 'plant_output.update',
+        'site.read',
+        'report.generate'
+      ],
+      fuel_main_manager: [
+        'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+        'vehicle.read',
+        'report.generate'
+      ],
+      fuel_sub_manager: [
+        'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+        'vehicle.read',
+        'report.generate'
+      ]
+    };
+
+    const expectedPermissions = rolePermissions[user.role] || [];
+    
+    // Update permissions
+    user.permissions = expectedPermissions;
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'Permissions refreshed successfully',
+      data: {
+        user: {
+          _id: user._id,
+          email: user.email,
+          role: user.role,
+          permissions: user.permissions,
+          permissionsCount: user.permissions.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error refreshing user permissions:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to refresh permissions',
       error: error.message
     });
   }

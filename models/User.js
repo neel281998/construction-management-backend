@@ -172,8 +172,7 @@ userSchema.methods.verifyOTP = function(candidateOTP) {
 
 // Set permissions based on role
 userSchema.pre('save', function(next) {
-  if (!this.isModified('role')) return next();
-  
+  // Always ensure permissions match the role (fixes missing or incorrect permissions)
   const rolePermissions = {
     admin: [
       'user.create', 'user.read', 'user.update', 'user.delete',
