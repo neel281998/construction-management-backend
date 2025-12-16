@@ -543,6 +543,33 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
       });
     }
 
+    // If fuel is coming from a main storage tank, decrease that tank's fuel level
+    // `source` is expected to be the main storage ID or name
+    let sourceMainStorage = null;
+    if (source) {
+      // Try to resolve source as MainStorage ID first, then by name
+      if (mongoose.Types.ObjectId.isValid(source)) {
+        sourceMainStorage = await MainStorage.findById(source);
+      } else {
+        sourceMainStorage = await MainStorage.findOne({ name: source });
+      }
+
+      if (sourceMainStorage) {
+        // Ensure main storage has enough fuel to transfer
+        if (sourceMainStorage.currentFuelLevel < quantity) {
+          return res.status(400).json({
+            success: false,
+            message: 'Insufficient fuel in main storage for transfer'
+          });
+        }
+
+        // Decrease main storage fuel and track as dispensed
+        sourceMainStorage.currentFuelLevel -= quantity;
+        sourceMainStorage.totalDispensed += quantity;
+        await sourceMainStorage.save();
+      }
+    }
+
     // Update sub pump fuel level
     subPump.totalAdded += quantity;
     subPump.currentFuelLevel += quantity; // Add the restocked quantity to current fuel level
@@ -588,7 +615,11 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
       metadata: {
         quantity,
         scaleReading,
-        source
+        source,
+        sourceMainStorage: sourceMainStorage ? {
+          id: sourceMainStorage._id,
+          name: sourceMainStorage.name
+        } : null
       },
       ...getActivityStyle('fuel_sub_pump_restocked'),
       req
@@ -597,7 +628,7 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
     res.status(201).json({
       success: true,
       message: 'Sub pump restocked successfully',
-      data: { restock, subPump }
+      data: { restock, subPump, sourceMainStorage }
     });
   } catch (error) {
     console.error('Restock sub pump error:', error);
