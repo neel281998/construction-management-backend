@@ -87,8 +87,8 @@ dailyReadingSchema.methods.completeReading = function(closingValue, closingImage
     timestamp: new Date()
   };
   
-  // Calculate fuel consumed (assuming higher reading = more fuel)
-  this.fuelConsumed = Math.max(0, this.openingReading.value - closingValue);
+  // Calculate daily consumption in liters as the absolute difference
+  this.fuelConsumed = Math.abs(closingValue - this.openingReading.value);
   this.isComplete = true;
   
   return this.save();
