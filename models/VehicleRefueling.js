@@ -4,7 +4,12 @@ const vehicleRefuelingSchema = new mongoose.Schema({
   vehicleId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Vehicle',
-    required: true
+    required: false
+  },
+  manualVehicleNumber: {
+    type: String,
+    required: false,
+    trim: true
   },
   pumpType: {
     type: String,
@@ -40,6 +45,16 @@ const vehicleRefuelingSchema = new mongoose.Schema({
     enum: ['km', 'hours'],
     required: true,
     default: 'km'
+  },
+  pumpStartReading: {
+    type: Number,
+    required: false,
+    min: 0
+  },
+  pumpEndReading: {
+    type: Number,
+    required: false,
+    min: 0
   },
   operator: {
     type: String,
@@ -84,6 +99,7 @@ const vehicleRefuelingSchema = new mongoose.Schema({
 
 // Indexes for efficient querying
 vehicleRefuelingSchema.index({ vehicleId: 1, date: -1 });
+vehicleRefuelingSchema.index({ manualVehicleNumber: 1, date: -1 });
 vehicleRefuelingSchema.index({ pumpType: 1, pumpId: 1 });
 vehicleRefuelingSchema.index({ date: -1 });
 vehicleRefuelingSchema.index({ operator: 1 });

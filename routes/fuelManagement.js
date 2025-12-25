@@ -780,6 +780,7 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
   try {
     const {
       vehicleId,
+      manualVehicleNumber,
       pumpType,
       pumpId,
       quantity,
@@ -788,16 +789,29 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
       odometerType,
       operator,
       shift,
-      notes
+      notes,
+      pumpStartReading,
+      pumpEndReading
     } = req.body;
 
-    // Validate vehicle exists
-    const vehicle = await Vehicle.findById(vehicleId);
-    if (!vehicle) {
-      return res.status(404).json({
+    // Validate that either vehicleId or manualVehicleNumber is provided
+    if (!vehicleId && !manualVehicleNumber) {
+      return res.status(400).json({
         success: false,
-        message: 'Vehicle not found'
+        message: 'Either vehicle selection or manual vehicle number is required'
       });
+    }
+
+    // Validate vehicle exists if vehicleId is provided
+    let vehicle = null;
+    if (vehicleId) {
+      vehicle = await Vehicle.findById(vehicleId);
+      if (!vehicle) {
+        return res.status(404).json({
+          success: false,
+          message: 'Vehicle not found'
+        });
+      }
     }
 
     // Validate pump exists
@@ -823,24 +837,40 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
       });
     }
 
-    // Get previous odometer reading for efficiency calculation
-    const previousOdometer = vehicle.fuelEfficiency.currentOdometer;
-    const previousRefueling = await VehicleRefueling.findOne({ vehicleId })
-      .sort({ date: -1 });
+    // Get previous odometer reading for efficiency calculation (only if vehicle exists)
+    let previousOdometer = 0;
+    let previousRefueling = null;
+    if (vehicleId) {
+      previousOdometer = vehicle.fuelEfficiency.currentOdometer;
+      previousRefueling = await VehicleRefueling.findOne({ vehicleId })
+        .sort({ date: -1 });
+    } else if (manualVehicleNumber) {
+      // Try to find previous refueling by manual vehicle number
+      previousRefueling = await VehicleRefueling.findOne({ 
+        manualVehicleNumber: manualVehicleNumber.trim() 
+      })
+        .sort({ date: -1 });
+      if (previousRefueling) {
+        previousOdometer = previousRefueling.odometerReading;
+      }
+    }
 
     // Create refueling record
     const refuelingData = {
-      vehicleId,
+      vehicleId: vehicleId || null,
+      manualVehicleNumber: manualVehicleNumber ? manualVehicleNumber.trim() : null,
       pumpType,
       pumpId,
       pumpTypeModel: pumpType === 'main' ? 'MainStorage' : 'SubPump',
       quantity,
       images,
       odometerReading,
-      odometerType,
+      odometerType: odometerType || 'km',
       operator,
       shift,
       notes,
+      pumpStartReading,
+      pumpEndReading,
       previousOdometer: previousRefueling ? previousRefueling.odometerReading : previousOdometer
     };
 
@@ -854,31 +884,33 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
 
     await refueling.save();
 
-    // Update vehicle fuel efficiency data
-    const distance = odometerReading - (previousRefueling ? previousRefueling.odometerReading : previousOdometer);
-    if (distance > 0 && quantity > 0) {
-      const efficiency = distance / quantity;
-      
-      vehicle.fuelEfficiency.currentOdometer = odometerReading;
-      vehicle.fuelEfficiency.odometerType = odometerType;
-      vehicle.fuelEfficiency.latestEfficiency = efficiency;
-      vehicle.fuelEfficiency.totalFuelConsumed += quantity;
-      vehicle.fuelEfficiency.totalDistance += distance;
-      vehicle.fuelEfficiency.lastRefuelingDate = new Date();
-      
-      // Add to efficiency history
-      vehicle.fuelEfficiency.efficiencyHistory.push({
-        date: new Date(),
-        efficiency,
-        fuelQuantity: quantity,
-        distance
-      });
-      
-      // Calculate average efficiency
-      const totalEfficiency = vehicle.fuelEfficiency.efficiencyHistory.reduce((sum, entry) => sum + entry.efficiency, 0);
-      vehicle.fuelEfficiency.averageEfficiency = totalEfficiency / vehicle.fuelEfficiency.efficiencyHistory.length;
-      
-      await vehicle.save();
+    // Update vehicle fuel efficiency data (only if vehicle exists)
+    if (vehicle) {
+      const distance = odometerReading - (previousRefueling ? previousRefueling.odometerReading : previousOdometer);
+      if (distance > 0 && quantity > 0) {
+        const efficiency = distance / quantity;
+        
+        vehicle.fuelEfficiency.currentOdometer = odometerReading;
+        vehicle.fuelEfficiency.odometerType = odometerType;
+        vehicle.fuelEfficiency.latestEfficiency = efficiency;
+        vehicle.fuelEfficiency.totalFuelConsumed += quantity;
+        vehicle.fuelEfficiency.totalDistance += distance;
+        vehicle.fuelEfficiency.lastRefuelingDate = new Date();
+        
+        // Add to efficiency history
+        vehicle.fuelEfficiency.efficiencyHistory.push({
+          date: new Date(),
+          efficiency,
+          fuelQuantity: quantity,
+          distance
+        });
+        
+        // Calculate average efficiency
+        const totalEfficiency = vehicle.fuelEfficiency.efficiencyHistory.reduce((sum, entry) => sum + entry.efficiency, 0);
+        vehicle.fuelEfficiency.averageEfficiency = totalEfficiency / vehicle.fuelEfficiency.efficiencyHistory.length;
+        
+        await vehicle.save();
+      }
     }
 
     // Update pump fuel level
@@ -887,22 +919,24 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
     await pump.save();
 
     // Log activity
+    const vehicleNumber = vehicle ? vehicle.vehicleNumber : manualVehicleNumber;
     await logActivity({
       user: req.user,
       action: 'vehicle_refueled',
       category: 'fuel',
       title: 'Vehicle Refueled',
-      message: `${vehicle.vehicleNumber} refueled with ${quantity}L from ${pump.name}`,
-      entityType: 'vehicle',
-      entityId: vehicle._id,
-      entityName: vehicle.vehicleNumber,
+      message: `${vehicleNumber} refueled with ${quantity}L from ${pump.name}`,
+      entityType: vehicle ? 'vehicle' : 'manual_vehicle',
+      entityId: vehicle ? vehicle._id : null,
+      entityName: vehicleNumber,
       metadata: {
         pumpType,
         pumpName: pump.name,
         quantity,
         odometerReading,
         efficiency: refueling.fuelEfficiency,
-        operator
+        operator,
+        isManualVehicle: !vehicle
       },
       ...getActivityStyle('vehicle_refueled'),
       req
@@ -911,7 +945,7 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
     res.status(201).json({
       success: true,
       message: 'Vehicle refueled successfully',
-      data: { refueling, vehicle, pump }
+      data: { refueling, vehicle: vehicle || null, pump }
     });
   } catch (error) {
     console.error('Vehicle refueling error:', error);
