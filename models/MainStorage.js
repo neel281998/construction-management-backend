@@ -127,14 +127,18 @@ mainStorageSchema.methods.calculateFuelLevel = function(scaleReading) {
   return Math.max(0, Math.min(fuelLevel, this.totalCapacity));
 };
 
-// Method to update current reading and fuel level
+// Method to update current reading (without changing fuel level)
+// Daily readings are measurements and should NOT change the actual fuel level
+// Fuel level only changes when fuel is added (restock) or removed (dispensed)
 mainStorageSchema.methods.updateReading = function(scaleReading, image) {
   this.currentReading = {
     value: scaleReading,
     image: image,
     date: new Date()
   };
-  this.currentFuelLevel = this.calculateFuelLevel(scaleReading);
+  // DO NOT recalculate currentFuelLevel from scale reading
+  // The fuel level should only change when fuel is actually added or removed
+  // this.currentFuelLevel = this.calculateFuelLevel(scaleReading);
   return this.save();
 };
 
