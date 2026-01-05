@@ -181,8 +181,14 @@ userSchema.pre('save', function(next) {
     this.hasCustomPermissions = false;
   }
   
-  // Skip auto-setting permissions if user has custom permissions (unless role changed or permissions are empty)
-  if (this.hasCustomPermissions && !this.isModified('role') && this.permissions && this.permissions.length > 0) {
+  // Skip auto-setting permissions if user has custom permissions (unless role changed)
+  // Also skip if permissions were explicitly modified (admin setting custom permissions)
+  if (this.hasCustomPermissions && !this.isModified('role')) {
+    return next();
+  }
+  
+  // If permissions were explicitly set (modified), don't override them
+  if (this.isModified('permissions') && this.permissions && this.permissions.length > 0 && this.hasCustomPermissions) {
     return next();
   }
   

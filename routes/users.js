@@ -70,6 +70,45 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Debug endpoint to check user permissions (for troubleshooting)
+router.get('/:id/debug-permissions', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        user: {
+          _id: user._id,
+          email: user.email,
+          role: user.role,
+          permissions: user.permissions,
+          permissionsCount: user.permissions ? user.permissions.length : 0,
+          hasCustomPermissions: user.hasCustomPermissions,
+          permissionsArray: Array.isArray(user.permissions) ? 'Yes' : 'No',
+          hasSiteRead: user.permissions && user.permissions.includes('site.read'),
+          hasSiteCreate: user.permissions && user.permissions.includes('site.create'),
+          hasSiteUpdate: user.permissions && user.permissions.includes('site.update'),
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Debug permissions error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get user permissions',
+      error: error.message
+    });
+  }
+});
+
 // Get single user
 router.get('/:id', authenticateToken, requirePermission('user.read'), async (req, res) => {
   try {
@@ -822,13 +861,21 @@ router.put('/:id/permissions', authenticateToken, requireAdmin, async (req, res)
       });
     }
 
+    // Use findByIdAndUpdate to bypass pre-save hooks and directly set permissions
+    // This ensures custom permissions are saved without interference
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { 
-        permissions: permissions,
-        hasCustomPermissions: true
+        $set: {
+          permissions: permissions,
+          hasCustomPermissions: true
+        }
       },
-      { new: true, runValidators: true }
+      { 
+        new: true, 
+        runValidators: false, // Skip validators to avoid any interference
+        setDefaultsOnInsert: false
+      }
     ).select('-password');
 
     if (!user) {
@@ -837,6 +884,14 @@ router.put('/:id/permissions', authenticateToken, requireAdmin, async (req, res)
         message: 'User not found'
       });
     }
+
+    // Verify permissions were saved correctly
+    console.log(`Updated permissions for user ${user.email}:`, {
+      role: user.role,
+      permissionsCount: user.permissions ? user.permissions.length : 0,
+      hasCustomPermissions: user.hasCustomPermissions,
+      hasSiteRead: user.permissions && user.permissions.includes('site.read')
+    });
 
     res.json({
       success: true,

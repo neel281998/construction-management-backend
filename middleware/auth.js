@@ -32,13 +32,18 @@ const authenticateToken = async (req, res, next) => {
     }
     
     // Ensure permissions array exists and is populated
-    if (!user.permissions || user.permissions.length === 0) {
-      // If no permissions, trigger save to populate from role (this will set permissions via pre-save hook)
+    // Only auto-populate if user doesn't have custom permissions
+    if ((!user.permissions || user.permissions.length === 0) && !user.hasCustomPermissions) {
+      // If no permissions and not custom, trigger save to populate from role (this will set permissions via pre-save hook)
       await user.save();
       // Reload to get fresh permissions
       const refreshedUser = await User.findById(decoded.userId).select('-password');
       req.user = refreshedUser;
     } else {
+      // Ensure permissions is an array (defensive check)
+      if (!Array.isArray(user.permissions)) {
+        user.permissions = [];
+      }
       req.user = user;
     }
     // Logging removed for performance - only log errors
@@ -73,7 +78,16 @@ const requirePermission = (permission) => {
       return next();
     }
     
-    if (!req.user.permissions.includes(permission)) {
+    // Ensure permissions is an array
+    const userPermissions = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+    
+    if (!userPermissions.includes(permission)) {
+      console.error(`Permission check failed for user ${req.user._id} (${req.user.email}):`, {
+        role: req.user.role,
+        requiredPermission: permission,
+        userPermissions: userPermissions,
+        hasCustomPermissions: req.user.hasCustomPermissions
+      });
       return res.status(403).json({
         success: false,
         message: 'Insufficient permissions'
