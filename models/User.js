@@ -81,6 +81,10 @@ const userSchema = new mongoose.Schema({
   permissions: [{
     type: String
   }],
+  hasCustomPermissions: {
+    type: Boolean,
+    default: false
+  },
   assignedSites: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Site'
@@ -170,8 +174,18 @@ userSchema.methods.verifyOTP = function(candidateOTP) {
   return { success: true, message: 'OTP verified successfully' };
 };
 
-// Set permissions based on role
+// Set permissions based on role (only if not custom)
 userSchema.pre('save', function(next) {
+  // If role changed, reset custom permissions flag and update permissions
+  if (this.isModified('role')) {
+    this.hasCustomPermissions = false;
+  }
+  
+  // Skip auto-setting permissions if user has custom permissions (unless role changed)
+  if (this.hasCustomPermissions && !this.isModified('role')) {
+    return next();
+  }
+  
   // Always ensure permissions match the role (fixes missing or incorrect permissions)
   const rolePermissions = {
     admin: [
@@ -241,6 +255,7 @@ userSchema.pre('save', function(next) {
   };
   
   this.permissions = rolePermissions[this.role] || [];
+  this.hasCustomPermissions = false; // Reset when role changes
   next();
 });
 
