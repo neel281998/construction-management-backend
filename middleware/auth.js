@@ -31,7 +31,16 @@ const authenticateToken = async (req, res, next) => {
       });
     }
     
-    req.user = user;
+    // Ensure permissions array exists and is populated
+    if (!user.permissions || user.permissions.length === 0) {
+      // If no permissions, trigger save to populate from role (this will set permissions via pre-save hook)
+      await user.save();
+      // Reload to get fresh permissions
+      const refreshedUser = await User.findById(decoded.userId).select('-password');
+      req.user = refreshedUser;
+    } else {
+      req.user = user;
+    }
     // Logging removed for performance - only log errors
     next();
   } catch (error) {

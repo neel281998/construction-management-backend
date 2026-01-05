@@ -891,7 +891,33 @@ router.post('/:id/permissions/reset', authenticateToken, requireAdmin, async (re
 // Refresh current user's permissions based on their role
 router.post('/refresh-my-permissions', authenticateToken, async (req, res) => {
   try {
-    const user = req.user;
+    // Get fresh user from database
+    const user = await User.findById(req.user._id);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // If user has custom permissions, don't reset them - just return current permissions
+    if (user.hasCustomPermissions) {
+      return res.json({
+        success: true,
+        message: 'User has custom permissions. Use reset endpoint to revert to role defaults.',
+        data: {
+          user: {
+            _id: user._id,
+            email: user.email,
+            role: user.role,
+            permissions: user.permissions,
+            permissionsCount: user.permissions.length,
+            hasCustomPermissions: true
+          }
+        }
+      });
+    }
     
     // Define role permissions (same as in User.js)
     const rolePermissions = {
@@ -969,8 +995,9 @@ router.post('/refresh-my-permissions', authenticateToken, async (req, res) => {
 
     const expectedPermissions = rolePermissions[user.role] || [];
     
-    // Update permissions
+    // Update permissions (this will trigger pre-save hook which respects hasCustomPermissions)
     user.permissions = expectedPermissions;
+    user.hasCustomPermissions = false; // Ensure it's not marked as custom
     await user.save();
     
     res.json({
@@ -982,7 +1009,8 @@ router.post('/refresh-my-permissions', authenticateToken, async (req, res) => {
           email: user.email,
           role: user.role,
           permissions: user.permissions,
-          permissionsCount: user.permissions.length
+          permissionsCount: user.permissions.length,
+          hasCustomPermissions: false
         }
       }
     });
