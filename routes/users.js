@@ -519,12 +519,9 @@ router.get('/available/inventory-managers', authenticateToken, requirePermission
   }
 });
 
-// Fix admin permissions (temporary endpoint)
+// Fix admin permissions (ensures admins keep full access)
 router.post('/fix-admin-permissions', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    console.log('Fixing admin permissions...');
-    
-    // Define the complete admin permissions including plant permissions
     const adminPermissions = [
       'user.create', 'user.read', 'user.update', 'user.delete',
       'site.create', 'site.read', 'site.update', 'site.delete',
@@ -532,19 +529,17 @@ router.post('/fix-admin-permissions', authenticateToken, requireAdmin, async (re
       'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
       'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
       'plant.create', 'plant.read', 'plant.update', 'plant.delete',
-      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
+      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete', 'plant_inventory.transfer',
       'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+      'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
       'attendance.read', 'attendance.approve',
       'report.generate', 'report.export'
     ];
 
-    // Update all admin users
     const result = await User.updateMany(
       { role: 'admin' },
-      { $set: { permissions: adminPermissions } }
+      { $set: { permissions: adminPermissions, hasCustomPermissions: false } }
     );
-
-    console.log(`Updated ${result.modifiedCount} admin users`);
 
     res.json({
       success: true,
@@ -554,7 +549,6 @@ router.post('/fix-admin-permissions', authenticateToken, requireAdmin, async (re
         permissions: adminPermissions
       }
     });
-
   } catch (error) {
     console.error('Error fixing admin permissions:', error);
     res.status(500).json({
@@ -587,135 +581,35 @@ router.get('/my-permissions', authenticateToken, async (req, res) => {
   }
 });
 
-// Fix all user permissions (temporary endpoint)
+// Fix all user permissions (now only ensures admins have full permissions)
 router.post('/fix-all-permissions', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    console.log('Fixing all user permissions...');
-    
-    // Define role permissions (same as in User.js)
-    const rolePermissions = {
-      admin: [
-        'user.create', 'user.read', 'user.update', 'user.delete',
-        'site.create', 'site.read', 'site.update', 'site.delete',
-        'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
-        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-        'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
-        'plant.create', 'plant.read', 'plant.update', 'plant.delete',
-        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
-        'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
-        'attendance.read', 'attendance.approve',
-        'report.generate', 'report.export'
-      ],
-      site_manager: [
-        'site.read', 'site.update',
-        'attendance.read', 'attendance.approve',
-        'report.generate'
-      ],
-      supervisor: [
-        'user.create', 'user.read',
-        'site.create', 'site.read',
-        'vehicle.create', 'vehicle.read',
-        'inventory.create', 'inventory.read',
-        'attendance.read', 'attendance.approve',
-        'report.generate'
-      ],
-      worker: [
-        'site.read',
-        'attendance.create', 'attendance.read'
-      ],
-      inventory_manager: [
-        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-        'storage_site.read', 'storage_site.update',
-        'report.generate'
-      ],
-      inventory_assistant: [
-        'inventory.read', 'inventory.update',
-        'storage_site.read'
-      ],
-      step_manager: [
-        'step.create', 'step.read', 'step.update', 'step.delete',
-        'site.read',
-        'user.read',
-        'report.generate'
-      ],
-      plant_manager: [
-        'plant.read', 'plant.update',
-        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
-        'plant_output.create', 'plant_output.read', 'plant_output.update',
-        'inventory.read', 'inventory.update',
-        'fuel.read', 'fuel.refuel',
-        'report.generate'
-      ],
-      plant_operator: [
-        'plant.read',
-        'plant_inventory.read', 'plant_inventory.update',
-        'plant_output.create', 'plant_output.read', 'plant_output.update',
-        'site.read',
-        'report.generate'
-      ],
-      fuel_main_manager: [
-        'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-        'vehicle.read',
-        'report.generate'
-      ],
-      fuel_sub_manager: [
-        'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-        'vehicle.read',
-        'report.generate'
-      ]
-    };
+    const adminPermissions = [
+      'user.create', 'user.read', 'user.update', 'user.delete',
+      'site.create', 'site.read', 'site.update', 'site.delete',
+      'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
+      'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+      'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
+      'plant.create', 'plant.read', 'plant.update', 'plant.delete',
+      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete', 'plant_inventory.transfer',
+      'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+      'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+      'attendance.read', 'attendance.approve',
+      'report.generate', 'report.export'
+    ];
 
-    // Get all users
-    const allUsers = await User.find({});
-    console.log(`Found ${allUsers.length} total users`);
+    const result = await User.updateMany(
+      { role: 'admin' },
+      { $set: { permissions: adminPermissions, hasCustomPermissions: false } }
+    );
 
-    let updatedCount = 0;
-    const results = [];
-
-    // Update each user based on their role
-    for (const user of allUsers) {
-      const expectedPermissions = rolePermissions[user.role] || [];
-      
-      // Check if permissions need updating
-      const currentPermissions = user.permissions || [];
-      const needsUpdate = JSON.stringify(currentPermissions.sort()) !== JSON.stringify(expectedPermissions.sort());
-      
-      if (needsUpdate) {
-        console.log(`Updating ${user.role} user: ${user.email}`);
-        
-        // Update permissions
-        user.permissions = expectedPermissions;
-        
-        // Save the user
-        await user.save();
-        
-        results.push({
-          email: user.email,
-          role: user.role,
-          updated: true,
-          permissionsCount: expectedPermissions.length
-        });
-        updatedCount++;
-      } else {
-        results.push({
-          email: user.email,
-          role: user.role,
-          updated: false,
-          permissionsCount: currentPermissions.length
-        });
-      }
-    }
-
-    console.log(`Updated ${updatedCount} users successfully!`);
-    
     res.json({
       success: true,
-      message: `Updated ${updatedCount} out of ${allUsers.length} users`,
-      updatedCount,
-      totalUsers: allUsers.length,
-      results
+      message: `Updated ${result.modifiedCount} admin users. Non-admin users are unchanged; set permissions manually.`,
+      data: {
+        modifiedCount: result.modifiedCount
+      }
     });
-
   } catch (error) {
     console.error('Error fixing all user permissions:', error);
     res.status(500).json({
@@ -943,12 +837,11 @@ router.post('/:id/permissions/reset', authenticateToken, requireAdmin, async (re
   }
 });
 
-// Refresh current user's permissions based on their role
+// Refresh current user's permissions (no role-based defaults except admin safety)
 router.post('/refresh-my-permissions', authenticateToken, async (req, res) => {
   try {
-    // Get fresh user from database
     const user = await User.findById(req.user._id);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -956,120 +849,58 @@ router.post('/refresh-my-permissions', authenticateToken, async (req, res) => {
       });
     }
 
-    // If user has custom permissions, don't reset them - just return current permissions
+    // If user has custom permissions, return them as-is
     if (user.hasCustomPermissions) {
       return res.json({
         success: true,
-        message: 'User has custom permissions. Use reset endpoint to revert to role defaults.',
+        message: 'Permissions loaded (custom)',
         data: {
           user: {
             _id: user._id,
             email: user.email,
             role: user.role,
-            permissions: user.permissions,
-            permissionsCount: user.permissions.length,
+            permissions: user.permissions || [],
+            permissionsCount: user.permissions ? user.permissions.length : 0,
             hasCustomPermissions: true
           }
         }
       });
     }
-    
-    // Define role permissions (same as in User.js)
-    const rolePermissions = {
-      admin: [
-        'user.create', 'user.read', 'user.update', 'user.delete',
-        'site.create', 'site.read', 'site.update', 'site.delete',
-        'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
-        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-        'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
-        'plant.create', 'plant.read', 'plant.update', 'plant.delete',
-        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
-        'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
-        'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-        'attendance.read', 'attendance.approve',
-        'report.generate', 'report.export'
-      ],
-      site_manager: [
-        'site.read', 'site.update',
-        'attendance.read', 'attendance.approve',
-        'report.generate'
-      ],
-      supervisor: [
-        'user.create', 'user.read',
-        'site.create', 'site.read',
-        'vehicle.create', 'vehicle.read',
-        'inventory.create', 'inventory.read',
-        'attendance.read', 'attendance.approve',
-        'report.generate'
-      ],
-      worker: [
-        'site.read',
-        'attendance.create', 'attendance.read'
-      ],
-      inventory_manager: [
-        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-        'storage_site.read', 'storage_site.update',
-        'report.generate'
-      ],
-      inventory_assistant: [
-        'inventory.read', 'inventory.update',
-        'storage_site.read'
-      ],
-      step_manager: [
-        'step.create', 'step.read', 'step.update', 'step.delete',
-        'site.read',
-        'user.read',
-        'report.generate'
-      ],
-      plant_manager: [
-        'plant.read', 'plant.update',
-        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
-        'plant_output.create', 'plant_output.read', 'plant_output.update',
-        'inventory.read', 'inventory.update',
-        'fuel.read', 'fuel.refuel',
-        'report.generate'
-      ],
-      plant_operator: [
-        'plant.read',
-        'plant_inventory.read', 'plant_inventory.update',
-        'plant_output.create', 'plant_output.read', 'plant_output.update',
-        'site.read',
-        'report.generate'
-      ],
-      fuel_main_manager: [
-        'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-        'vehicle.read',
-        'report.generate'
-      ],
-      fuel_sub_manager: [
-        'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-        'vehicle.read',
-        'report.generate'
-      ]
-    };
 
-    const expectedPermissions = rolePermissions[user.role] || [];
-    
-    // Update permissions (this will trigger pre-save hook which respects hasCustomPermissions)
-    user.permissions = expectedPermissions;
-    user.hasCustomPermissions = false; // Ensure it's not marked as custom
-    await user.save();
-    
+    // Safety: ensure admin always has full permissions
+    const adminPermissions = [
+      'user.create', 'user.read', 'user.update', 'user.delete',
+      'site.create', 'site.read', 'site.update', 'site.delete',
+      'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
+      'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+      'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
+      'plant.create', 'plant.read', 'plant.update', 'plant.delete',
+      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete', 'plant_inventory.transfer',
+      'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+      'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+      'attendance.read', 'attendance.approve',
+      'report.generate', 'report.export'
+    ];
+
+    if (user.role === 'admin' && (!user.permissions || user.permissions.length === 0)) {
+      user.permissions = adminPermissions;
+      await user.save();
+    }
+
     res.json({
       success: true,
-      message: 'Permissions refreshed successfully',
+      message: 'Permissions loaded',
       data: {
         user: {
           _id: user._id,
           email: user.email,
           role: user.role,
-          permissions: user.permissions,
-          permissionsCount: user.permissions.length,
-          hasCustomPermissions: false
+          permissions: user.permissions || [],
+          permissionsCount: user.permissions ? user.permissions.length : 0,
+          hasCustomPermissions: user.hasCustomPermissions
         }
       }
     });
-
   } catch (error) {
     console.error('Error refreshing user permissions:', error);
     res.status(500).json({

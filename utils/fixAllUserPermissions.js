@@ -12,125 +12,27 @@ async function fixAllUserPermissions() {
     // Get the User model
     const User = require('../models/User');
 
-    // Define role permissions (same as in User.js)
-    const rolePermissions = {
-      admin: [
-        'user.create', 'user.read', 'user.update', 'user.delete',
-        'site.create', 'site.read', 'site.update', 'site.delete',
-        'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
-        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-        'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
-        'plant.create', 'plant.read', 'plant.update', 'plant.delete',
-        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
-        'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
-        'attendance.read', 'attendance.approve',
-        'report.generate', 'report.export'
-      ],
-      site_manager: [
-        'site.read', 'site.update', // Can only read assigned sites and update progress
-        'attendance.read', 'attendance.approve',
-        'report.generate'
-      ],
-      supervisor: [
-        'user.create', 'user.read', // Can view and create users
-        'site.create', 'site.read', // Can view and create sites
-        'vehicle.create', 'vehicle.read', // Can view and create vehicles
-        'inventory.create', 'inventory.read', // Can view and create inventory
-        'attendance.read', 'attendance.approve', // Can view and approve attendance
-        'report.generate' // Can generate reports
-        // Note: No update/delete permissions for supervisor
-      ],
-      worker: [
-        'site.read',
-        'attendance.create', 'attendance.read'
-      ],
-      inventory_manager: [
-        'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-        'storage_site.read', 'storage_site.update',
-        'report.generate'
-      ],
-      inventory_assistant: [
-        'inventory.read', 'inventory.update',
-        'storage_site.read'
-      ],
-      step_manager: [
-        'step.create', 'step.read', 'step.update', 'step.delete',
-        'site.read', // Can read sites to manage steps
-        'user.read', // Can read users to assign to steps
-        'report.generate' // Can generate step reports
-      ],
-      plant_manager: [
-        'plant.read', 'plant.update',
-        'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
-        'plant_output.create', 'plant_output.read', 'plant_output.update',
-        'inventory.read', 'inventory.update',
-        'fuel.read', 'fuel.refuel',
-        'report.generate'
-      ],
-      plant_operator: [
-        'plant.read',
-        'plant_inventory.read', 'plant_inventory.update',
-        'plant_output.create', 'plant_output.read', 'plant_output.update',
-        'site.read',
-        'report.generate'
-      ],
-      fuel_main_manager: [
-        'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-        'vehicle.read',
-        'report.generate'
-      ],
-      fuel_sub_manager: [
-        'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-        'vehicle.read',
-        'report.generate'
-      ]
-    };
+    // Only ensure admins have full permissions; non-admin users are managed manually
+    const adminPermissions = [
+      'user.create', 'user.read', 'user.update', 'user.delete',
+      'site.create', 'site.read', 'site.update', 'site.delete',
+      'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
+      'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+      'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
+      'plant.create', 'plant.read', 'plant.update', 'plant.delete',
+      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete', 'plant_inventory.transfer',
+      'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+      'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+      'attendance.read', 'attendance.approve',
+      'report.generate', 'report.export'
+    ];
 
-    // Get all users
-    const allUsers = await User.find({});
-    console.log(`Found ${allUsers.length} total users`);
+    const result = await User.updateMany(
+      { role: 'admin' },
+      { $set: { permissions: adminPermissions, hasCustomPermissions: false } }
+    );
 
-    let updatedCount = 0;
-
-    // Update each user based on their role
-    for (const user of allUsers) {
-      const expectedPermissions = rolePermissions[user.role] || [];
-      
-      // Check if permissions need updating
-      const currentPermissions = user.permissions || [];
-      const needsUpdate = JSON.stringify(currentPermissions.sort()) !== JSON.stringify(expectedPermissions.sort());
-      
-      if (needsUpdate) {
-        console.log(`Updating ${user.role} user: ${user.email}`);
-        console.log(`   Current permissions: ${currentPermissions.length}`);
-        console.log(`   Expected permissions: ${expectedPermissions.length}`);
-        
-        // Update permissions
-        user.permissions = expectedPermissions;
-        
-        // Save the user
-        await user.save();
-        
-        console.log(`   ✅ Updated permissions for ${user.email}`);
-        updatedCount++;
-      } else {
-        console.log(`   ✅ ${user.email} (${user.role}) already has correct permissions`);
-      }
-    }
-
-    console.log(`\n✅ Updated ${updatedCount} users successfully!`);
-    
-    // Verification by role
-    console.log('\n📋 Verification by role:');
-    for (const [role, expectedPermissions] of Object.entries(rolePermissions)) {
-      const usersWithRole = await User.find({ role });
-      console.log(`\n${role.toUpperCase()} (${usersWithRole.length} users):`);
-      
-      for (const user of usersWithRole) {
-        const hasCorrectPermissions = JSON.stringify((user.permissions || []).sort()) === JSON.stringify(expectedPermissions.sort());
-        console.log(`   ${user.email}: ${hasCorrectPermissions ? '✅' : '❌'} (${(user.permissions || []).length} permissions)`);
-      }
-    }
+    console.log(`\n✅ Updated ${result.modifiedCount} admin users. Non-admin users left unchanged.`);
 
   } catch (error) {
     console.error('❌ Error updating user permissions:', error);

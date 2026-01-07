@@ -38,10 +38,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Role is required'],
     enum: {
-      values: ['admin', 'site_manager', 'supervisor', 'worker', 'inventory_manager', 'inventory_assistant', 'step_manager', 'plant_manager', 'fuel_main_manager', 'fuel_sub_manager'],
+      values: ['admin', 'user'],
       message: 'Invalid role specified'
     },
-    default: 'worker'
+    default: 'user'
   },
   avatar: {
     type: String, // GridFS file ID
@@ -174,94 +174,44 @@ userSchema.methods.verifyOTP = function(candidateOTP) {
   return { success: true, message: 'OTP verified successfully' };
 };
 
-// Set permissions based on role (only if not custom)
+// Default admin permissions (kept for safety so admins always have access)
+const ADMIN_PERMISSIONS = [
+  'user.create', 'user.read', 'user.update', 'user.delete',
+  'site.create', 'site.read', 'site.update', 'site.delete',
+  'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
+  'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
+  'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
+  'plant.create', 'plant.read', 'plant.update', 'plant.delete',
+  'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete', 'plant_inventory.transfer',
+  'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
+  'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+  'attendance.read', 'attendance.approve',
+  'report.generate', 'report.export'
+];
+
+// Set permissions defaults (no role-based mapping except admin safety)
 userSchema.pre('save', function(next) {
-  // If role changed, reset custom permissions flag and update permissions
-  if (this.isModified('role')) {
+  // If role changed away from admin, do not auto-change permissions; admin manages manually
+  if (this.isModified('role') && this.role !== 'admin') {
+    this.hasCustomPermissions = true; // treat non-admin permissions as custom
+  }
+
+  // If user has custom permissions, never override
+  if (this.hasCustomPermissions) {
+    return next();
+  }
+
+  // Ensure admins always retain full permissions unless explicitly customized
+  if (this.role === 'admin' && (!this.permissions || this.permissions.length === 0)) {
+    this.permissions = ADMIN_PERMISSIONS;
     this.hasCustomPermissions = false;
   }
-  
-  // Skip auto-setting permissions if user has custom permissions (unless role changed)
-  // Also skip if permissions were explicitly modified (admin setting custom permissions)
-  if (this.hasCustomPermissions && !this.isModified('role')) {
-    return next();
+
+  // Ensure permissions array exists
+  if (!Array.isArray(this.permissions)) {
+    this.permissions = [];
   }
-  
-  // If permissions were explicitly set (modified), don't override them
-  if (this.isModified('permissions') && this.permissions && this.permissions.length > 0 && this.hasCustomPermissions) {
-    return next();
-  }
-  
-  // Always ensure permissions match the role (fixes missing or incorrect permissions)
-  const rolePermissions = {
-    admin: [
-      'user.create', 'user.read', 'user.update', 'user.delete',
-      'site.create', 'site.read', 'site.update', 'site.delete',
-      'vehicle.create', 'vehicle.read', 'vehicle.update', 'vehicle.delete',
-      'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-      'storage_site.create', 'storage_site.read', 'storage_site.update', 'storage_site.delete',
-      'plant.create', 'plant.read', 'plant.update', 'plant.delete',
-      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.delete',
-      'plant_output.create', 'plant_output.read', 'plant_output.update', 'plant_output.delete',
-      'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-      'attendance.read', 'attendance.approve',
-      'report.generate', 'report.export'
-    ],
-    site_manager: [
-      'site.read', 'site.update', // Can only read assigned sites and update progress
-      'attendance.read', 'attendance.approve',
-      'report.generate'
-    ],
-    supervisor: [
-      'user.create', 'user.read', // Can view and create users
-      'site.create', 'site.read', // Can view and create sites
-      'vehicle.create', 'vehicle.read', // Can view and create vehicles
-      'inventory.create', 'inventory.read', // Can view and create inventory
-      'attendance.read', 'attendance.approve', // Can view and approve attendance
-      'report.generate' // Can generate reports
-      // Note: No update/delete permissions for supervisor
-    ],
-    worker: [
-      'site.read',
-      'attendance.create', 'attendance.read'
-    ],
-    inventory_manager: [
-      'inventory.create', 'inventory.read', 'inventory.update', 'inventory.delete',
-      'storage_site.read', 'storage_site.update',
-      'report.generate'
-    ],
-    inventory_assistant: [
-      'inventory.read', 'inventory.update',
-      'storage_site.read'
-    ],
-    step_manager: [
-      'step.create', 'step.read', 'step.update', 'step.delete',
-      'site.read', // Can read sites to manage steps
-      'user.read', // Can read users to assign to steps
-      'report.generate' // Can generate step reports
-    ],
-    plant_manager: [
-      'plant.read', 'plant.update', // Can read and update assigned plants
-      'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update',
-      'plant_output.create', 'plant_output.read', 'plant_output.update',
-      'inventory.read', 'inventory.update', // Can read and update inventory for dispatch/transfer
-      'fuel.read', 'fuel.refuel', // Can read fuel data and refuel vehicles
-      'report.generate' // Can generate plant reports
-    ],
-    fuel_main_manager: [
-      'fuel.create', 'fuel.read', 'fuel.update', 'fuel.delete', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-      'vehicle.read', // Can read vehicles for refueling
-      'report.generate'
-    ],
-    fuel_sub_manager: [
-      'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
-      'vehicle.read', // Can read vehicles for refueling
-      'report.generate'
-    ]
-  };
-  
-  this.permissions = rolePermissions[this.role] || [];
-  this.hasCustomPermissions = false; // Reset when role changes
+
   next();
 });
 
