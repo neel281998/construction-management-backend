@@ -1,11 +1,11 @@
 const express = require('express');
 const User = require('../models/User');
-const { authenticateToken, requirePermission, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requireAdmin, requireAdminOrSupervisor } = require('../middleware/auth');
 
 const router = express.Router();
 
-// Get all users (admin only)
-router.get('/', authenticateToken, requireAdmin, async (req, res) => {
+// Get all users (admin or supervisor)
+router.get('/', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const {
       page = 1,
@@ -71,7 +71,7 @@ router.get('/', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // Debug endpoint to check user permissions (for troubleshooting)
-router.get('/:id/debug-permissions', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/:id/debug-permissions', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
     
@@ -123,9 +123,9 @@ router.get('/:id', authenticateToken, requirePermission('user.read'), async (req
       });
     }
     
-    // Users can only view their own profile unless they have admin/manager permissions
+    // Users can only view their own profile unless admin/supervisor/site_manager
     if (req.user._id.toString() !== user._id.toString() && 
-        !['admin', 'site_manager'].includes(req.user.role)) {
+        !['admin', 'supervisor', 'site_manager'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -146,8 +146,8 @@ router.get('/:id', authenticateToken, requirePermission('user.read'), async (req
   }
 });
 
-// Create new user (admin only)
-router.post('/', authenticateToken, requireAdmin, async (req, res) => {
+// Create new user (admin or supervisor)
+router.post('/', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const { email, phone, password, firstName, lastName, role, assignedSites } = req.body;
     
@@ -264,7 +264,7 @@ router.put('/:id', authenticateToken, requirePermission('user.update'), async (r
 });
 
 // Update user role (admin only)
-router.put('/:id/role', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/:id/role', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const { role } = req.body;
     
@@ -304,7 +304,7 @@ router.put('/:id/role', authenticateToken, requireAdmin, async (req, res) => {
 });
 
 // Assign user to sites
-router.put('/:id/assign-sites', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/:id/assign-sites', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const { siteIds } = req.body;
     
@@ -344,7 +344,7 @@ router.put('/:id/assign-sites', authenticateToken, requireAdmin, async (req, res
 });
 
 // Deactivate user (admin only)
-router.put('/:id/deactivate', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/:id/deactivate', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -375,7 +375,7 @@ router.put('/:id/deactivate', authenticateToken, requireAdmin, async (req, res) 
 });
 
 // Activate user (admin only)
-router.put('/:id/activate', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/:id/activate', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -406,7 +406,7 @@ router.put('/:id/activate', authenticateToken, requireAdmin, async (req, res) =>
 });
 
 // Get user statistics
-router.get('/stats/overview', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/stats/overview', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const stats = await User.aggregate([
       {
@@ -621,7 +621,7 @@ router.post('/fix-all-permissions', authenticateToken, requireAdmin, async (req,
 });
 
 // Get all available permissions (admin only)
-router.get('/permissions/available', authenticateToken, requireAdmin, async (req, res) => {
+router.get('/permissions/available', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     // Define all available permissions grouped by category
     const allPermissions = {
@@ -718,7 +718,7 @@ router.get('/permissions/available', authenticateToken, requireAdmin, async (req
 });
 
 // Update user permissions (admin only)
-router.put('/:id/permissions', authenticateToken, requireAdmin, async (req, res) => {
+router.put('/:id/permissions', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const { permissions } = req.body;
     
@@ -804,7 +804,7 @@ router.put('/:id/permissions', authenticateToken, requireAdmin, async (req, res)
 });
 
 // Reset user permissions to role defaults (admin only)
-router.post('/:id/permissions/reset', authenticateToken, requireAdmin, async (req, res) => {
+router.post('/:id/permissions/reset', authenticateToken, requireAdminOrSupervisor, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     

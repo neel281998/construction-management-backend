@@ -217,14 +217,13 @@ router.get('/admin/pending-users', authenticateToken, async (req, res) => {
   }
 });
 
-// Approve user (Admin only)
+// Approve user (Admin or Supervisor - no delete)
 router.post('/admin/approve-user/:userId', authenticateToken, async (req, res) => {
   try {
-    // Check if current user is admin
-    if (req.user.role !== 'admin') {
+    if (!['admin', 'supervisor'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Admin privileges required.'
+        message: 'Access denied. Admin or supervisor required.'
       });
     }
     
@@ -246,10 +245,10 @@ router.post('/admin/approve-user/:userId', authenticateToken, async (req, res) =
       });
     }
     
-    // Update user status and role
+    // Update user status and role (allowed roles: admin, supervisor, user)
     user.status = 'active';
     user.isVerified = true;
-    if (role && ['admin', 'site_manager', 'supervisor', 'inventory_manager', 'inventory_assistant', 'worker'].includes(role)) {
+    if (role && ['admin', 'supervisor', 'user'].includes(role)) {
       user.role = role;
     }
     

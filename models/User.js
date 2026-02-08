@@ -38,7 +38,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Role is required'],
     enum: {
-      values: ['admin', 'user'],
+      values: ['admin', 'supervisor', 'user'],
       message: 'Invalid role specified'
     },
     default: 'user'
@@ -174,7 +174,7 @@ userSchema.methods.verifyOTP = function(candidateOTP) {
   return { success: true, message: 'OTP verified successfully' };
 };
 
-// Default admin permissions (kept for safety so admins always have access)
+// Default admin permissions (full access including delete)
 const ADMIN_PERMISSIONS = [
   'user.create', 'user.read', 'user.update', 'user.delete',
   'site.create', 'site.read', 'site.update', 'site.delete',
@@ -189,25 +189,45 @@ const ADMIN_PERMISSIONS = [
   'report.generate', 'report.export'
 ];
 
-// Set permissions defaults (no role-based mapping except admin safety)
-userSchema.pre('save', function(next) {
-  // If role changed away from admin, do not auto-change permissions; admin manages manually
-  if (this.isModified('role') && this.role !== 'admin') {
-    this.hasCustomPermissions = true; // treat non-admin permissions as custom
-  }
+// Supervisor: all permissions except delete (no *.delete)
+const SUPERVISOR_PERMISSIONS = [
+  'user.create', 'user.read', 'user.update',
+  'site.create', 'site.read', 'site.update',
+  'vehicle.create', 'vehicle.read', 'vehicle.update',
+  'inventory.create', 'inventory.read', 'inventory.update',
+  'storage_site.create', 'storage_site.read', 'storage_site.update',
+  'plant.create', 'plant.read', 'plant.update',
+  'plant_inventory.create', 'plant_inventory.read', 'plant_inventory.update', 'plant_inventory.transfer',
+  'plant_output.create', 'plant_output.read', 'plant_output.update',
+  'fuel.create', 'fuel.read', 'fuel.update', 'fuel.restock', 'fuel.reading', 'fuel.refuel',
+  'attendance.read', 'attendance.approve',
+  'report.generate', 'report.export'
+];
 
+// Set permissions defaults by role
+userSchema.pre('save', function(next) {
   // If user has custom permissions, never override
   if (this.hasCustomPermissions) {
     return next();
   }
 
-  // Ensure admins always retain full permissions unless explicitly customized
+  // Admin: full permissions including delete
   if (this.role === 'admin' && (!this.permissions || this.permissions.length === 0)) {
     this.permissions = ADMIN_PERMISSIONS;
     this.hasCustomPermissions = false;
   }
 
-  // Ensure permissions array exists
+  // Supervisor: all except delete
+  if (this.role === 'supervisor' && (!this.permissions || this.permissions.length === 0)) {
+    this.permissions = SUPERVISOR_PERMISSIONS;
+    this.hasCustomPermissions = false;
+  }
+
+  // User: permissions managed by admin/supervisor (assigned sites + custom permissions)
+  if (this.role === 'user' && this.isModified('role')) {
+    this.hasCustomPermissions = true;
+  }
+
   if (!Array.isArray(this.permissions)) {
     this.permissions = [];
   }

@@ -132,6 +132,17 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
+// Check if user is admin or supervisor (for user management etc.; delete stays admin-only)
+const requireAdminOrSupervisor = (req, res, next) => {
+  if (!req.user || !['admin', 'supervisor'].includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Admin or supervisor access required'
+    });
+  }
+  next();
+};
+
 // Check if user can access site
 const canAccessSite = async (req, res, next) => {
   try {
@@ -144,8 +155,8 @@ const canAccessSite = async (req, res, next) => {
       });
     }
     
-    // Admin can access all sites
-    if (req.user.role === 'admin') {
+    // Admin and supervisor can access all sites
+    if (['admin', 'supervisor'].includes(req.user.role)) {
       return next();
     }
     
@@ -182,8 +193,8 @@ const canAccessStorageSite = async (req, res, next) => {
       });
     }
     
-    // Admin can access all storage sites
-    if (req.user.role === 'admin') {
+    // Admin and supervisor can access all storage sites
+    if (['admin', 'supervisor'].includes(req.user.role)) {
       return next();
     }
     
@@ -213,6 +224,7 @@ module.exports = {
   requirePermission,
   requireRole,
   requireAdmin,
+  requireAdminOrSupervisor,
   canAccessSite,
   canAccessStorageSite
 };
