@@ -19,11 +19,7 @@ router.get('/', authenticateToken, requirePermission('vehicle.read'), async (req
     // Build query
     let query = { isActive: true };
     
-    // Role-based filtering for supervisors
-    if (req.user.role === 'supervisor' && req.user.assignedSites && req.user.assignedSites.length > 0) {
-      // Supervisors can only see vehicles assigned to their sites
-      query.assignedSite = { $in: req.user.assignedSites };
-    }
+    // Supervisors see all vehicles (same as admin); only regular users are filtered by assigned sites
     
     // Apply filters
     if (status && status !== 'all') {

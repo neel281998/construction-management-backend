@@ -26,18 +26,13 @@ router.get('/', authenticateToken, requirePermission('site.read'), cacheMiddlewa
     // Build query
     let query = { isActive: true };
     
-    // Role-based filtering
-    if (req.user.role !== 'admin') {
+    // Role-based filtering: admin and supervisor see all sites; others filtered by siteManager/assignedStaff
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor') {
       const filterConditions = [
         { siteManager: req.user._id },
         { 'assignedStaff.user': req.user._id }
       ];
-      
-      // For supervisors, also check assignedSites field
-      if (req.user.role === 'supervisor' && req.user.assignedSites && req.user.assignedSites.length > 0) {
-        filterConditions.push({ _id: { $in: req.user.assignedSites } });
-      }
-      
       query.$or = filterConditions;
     }
     
@@ -170,8 +165,9 @@ router.get('/:id', authenticateToken, requirePermission('site.read'), async (req
       });
     }
     
-    // Check access permissions
-    if (req.user.role !== 'admin' && 
+    // Check access permissions: admin/supervisor full access; others need siteManager or assignedStaff
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' &&
         site.siteManager.toString() !== req.user._id.toString() &&
         !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
       return res.status(403).json({
@@ -209,8 +205,9 @@ router.get('/:id/progress', authenticateToken, requirePermission('site.read'), a
       });
     }
     
-    // Check access permissions
-    if (req.user.role !== 'admin' && 
+    // Check access permissions: admin/supervisor full access; others need siteManager or assignedStaff
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' &&
         site.siteManager.toString() !== req.user._id.toString() &&
         !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
       return res.status(403).json({
@@ -613,8 +610,9 @@ router.put('/:id/status', authenticateToken, requirePermission('site.update'), a
       });
     }
     
-    // Check permissions
-    if (req.user.role !== 'admin' && site.siteManager.toString() !== req.user._id.toString()) {
+    // Check permissions: admin/supervisor full access; others need siteManager
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' && site.siteManager.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -690,8 +688,9 @@ router.put('/:id/manager', authenticateToken, requirePermission('site.update'), 
       });
     }
     
-    // Check permissions - only admin or current site manager can change
-    if (req.user.role !== 'admin' && site.siteManager.toString() !== req.user._id.toString()) {
+    // Check permissions: admin/supervisor or current site manager can change
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' && site.siteManager.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -731,8 +730,9 @@ router.put('/:id', authenticateToken, requirePermission('site.update'), async (r
       });
     }
     
-    // Check permissions
-    if (req.user.role !== 'admin' && site.siteManager.toString() !== req.user._id.toString()) {
+    // Check permissions: admin/supervisor or site manager
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' && site.siteManager.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -932,10 +932,11 @@ router.get('/:id/progress', authenticateToken, requirePermission('site.read'), a
       });
     }
     
-    // Check access permissions
-    if (req.user.role !== 'admin' && 
+    // Check access permissions: admin/supervisor full access; others need siteManager or assignedStaff
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' &&
         site.siteManager.toString() !== req.user._id.toString() &&
-        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+        !site.assignedStaff.some(staff => staff.user && (staff.user._id || staff.user).toString() === req.user._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -1022,10 +1023,11 @@ router.get('/:id/progress-analytics', authenticateToken, requirePermission('site
       });
     }
     
-    // Check access permissions
-    if (req.user.role !== 'admin' && 
+    // Check access permissions: admin/supervisor full access; others need siteManager or assignedStaff
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' &&
         site.siteManager.toString() !== req.user._id.toString() &&
-        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+        !site.assignedStaff.some(staff => staff.user && (staff.user._id || staff.user).toString() === req.user._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -1129,10 +1131,11 @@ router.get('/:id/milestones', authenticateToken, requirePermission('site.read'),
       });
     }
     
-    // Check access permissions
-    if (req.user.role !== 'admin' && 
+    // Check access permissions: admin/supervisor full access; others need siteManager or assignedStaff
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' &&
         site.siteManager.toString() !== req.user._id.toString() &&
-        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+        !site.assignedStaff.some(staff => staff.user && (staff.user._id || staff.user).toString() === req.user._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -1185,10 +1188,11 @@ router.get('/:id/progress-alerts', authenticateToken, requirePermission('site.re
       });
     }
     
-    // Check access permissions
-    if (req.user.role !== 'admin' && 
+    // Check access permissions: admin/supervisor full access; others need siteManager or assignedStaff
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' &&
         site.siteManager.toString() !== req.user._id.toString() &&
-        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+        !site.assignedStaff.some(staff => staff.user && (staff.user._id || staff.user).toString() === req.user._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -1334,10 +1338,11 @@ router.post('/:id/recalculate-progress', authenticateToken, requirePermission('s
       });
     }
     
-    // Check access permissions
-    if (req.user.role !== 'admin' && 
+    // Check access permissions: admin/supervisor full access; others need siteManager or assignedStaff
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' &&
         site.siteManager.toString() !== req.user._id.toString() &&
-        !site.assignedStaff.some(staff => staff.user._id.toString() === req.user._id.toString())) {
+        !site.assignedStaff.some(staff => staff.user && (staff.user._id || staff.user).toString() === req.user._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied'

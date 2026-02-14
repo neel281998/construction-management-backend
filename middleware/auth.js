@@ -73,8 +73,12 @@ const requirePermission = (permission) => {
       });
     }
     
-    // Admin users bypass all permission checks
-    if (req.user.role === 'admin') {
+    // Admin bypasses all permission checks; supervisor bypasses except delete
+    const role = (req.user.role || '').toLowerCase();
+    if (role === 'admin') {
+      return next();
+    }
+    if (role === 'supervisor' && !permission.endsWith('.delete')) {
       return next();
     }
     
