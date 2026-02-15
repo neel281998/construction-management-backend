@@ -38,6 +38,7 @@ const fuelLogRoutes = require('../routes/fuelLogs');
 const fuelManagementRoutes = require('../routes/fuelManagement');
 const vehicleAnalyticsRoutes = require('../routes/vehicleAnalytics');
 const vehicleMaintenanceRoutes = require('../routes/vehicleMaintenance');
+const plantReportsRoutes = require('../routes/plantReports');
 
 const app = express();
 
@@ -200,7 +201,8 @@ app.get('/', (req, res) => {
       fuelLogs: '/api/fuel/logs',
       fuelManagement: '/api/fuel',
       vehicleAnalytics: '/api/vehicle-analytics',
-      vehicleMaintenance: '/api/vehicle-maintenance'
+      vehicleMaintenance: '/api/vehicle-maintenance',
+      plantReports: '/api/plant-reports'
     }
   });
 });
@@ -238,6 +240,7 @@ app.use('/api/fuel/logs', fuelLogRoutes);
 app.use('/api/fuel', fuelManagementRoutes);
 app.use('/api/vehicle-analytics', vehicleAnalyticsRoutes);
 app.use('/api/vehicle-maintenance', vehicleMaintenanceRoutes);
+app.use('/api/plant-reports', plantReportsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
