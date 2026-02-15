@@ -73,6 +73,91 @@ router.get('/', authenticateToken, requirePermission('storage_site.read'), async
   }
 });
 
+// Storage site inventory report (must be before /:id)
+router.get('/report', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
+  try {
+    const { storageSiteId, category, lowStock } = req.query;
+
+    let query = { isActive: true };
+
+    if (storageSiteId) {
+      query.storageSite = storageSiteId;
+    } else if (req.user.role !== 'admin' && req.user.assignedStorageSites && req.user.assignedStorageSites.length > 0) {
+      query.storageSite = { $in: req.user.assignedStorageSites };
+    }
+
+    if (category && category !== 'all') {
+      query.category = category;
+    }
+
+    if (lowStock === 'true') {
+      query.$expr = { $lte: ['$currentStock', '$minimumStock'] };
+    }
+
+    const items = await Inventory.find(query)
+      .populate('storageSite', 'name code address')
+      .populate('restockHistory.restockedBy', 'firstName lastName email role phone')
+      .sort({ 'storageSite.name': 1, itemName: 1 })
+      .limit(1000)
+      .lean();
+
+    const locationStr = (addr) => {
+      if (!addr) return '';
+      const parts = [addr.street, addr.city, addr.state, addr.zipCode].filter(Boolean);
+      return parts.join(', ');
+    };
+
+    const rows = items.map((inv) => {
+      const site = inv.storageSite;
+      const lastRestock = inv.restockHistory && inv.restockHistory.length > 0
+        ? inv.restockHistory[inv.restockHistory.length - 1]
+        : null;
+      const lastRestockUser = lastRestock && lastRestock.restockedBy ? lastRestock.restockedBy : null;
+
+      let stockStatus = 'Normal';
+      if (inv.currentStock <= inv.minimumStock) stockStatus = 'Low Stock';
+      if (inv.minimumStock > 0 && inv.currentStock === 0) stockStatus = 'Out of Stock';
+
+      return {
+        _id: inv._id,
+        siteName: site ? site.name : '',
+        siteCode: site ? site.code : '',
+        location: site && site.address ? locationStr(site.address) : '',
+        itemName: inv.itemName,
+        unit: inv.unit,
+        category: inv.category,
+        currentStock: inv.currentStock,
+        minimumStock: inv.minimumStock,
+        maximumStock: inv.maximumStock,
+        stockStatus,
+        lastRestockedDate: lastRestock && lastRestock.restockedAt ? lastRestock.restockedAt : (inv.lastRestocked || ''),
+        quantityAdded: lastRestock ? lastRestock.quantity : '',
+        supplier: lastRestock && lastRestock.supplier ? lastRestock.supplier : (inv.supplier && inv.supplier.name ? inv.supplier.name : ''),
+        vehicleNumber: lastRestock && lastRestock.vehicle && lastRestock.vehicle.vehicleNumber
+          ? lastRestock.vehicle.vehicleNumber
+          : (inv.broughtByVehicle && inv.broughtByVehicle.vehicleNumber ? inv.broughtByVehicle.vehicleNumber : ''),
+        cost: lastRestock && lastRestock.cost != null ? lastRestock.cost : '',
+        itemCreatedBy: '',
+        lastUpdatedBy: '',
+        lastRestockedBy: lastRestockUser ? (lastRestockUser.firstName + ' ' + lastRestockUser.lastName).trim() : '',
+        userRole: lastRestockUser ? lastRestockUser.role : '',
+        userContact: lastRestockUser ? (lastRestockUser.phone || lastRestockUser.email || '') : '',
+      };
+    });
+
+    res.json({
+      success: true,
+      data: { report: rows },
+    });
+  } catch (error) {
+    console.error('Storage site report error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch storage site report',
+    });
+  }
+});
+
 // Get single storage site
 router.get('/:id', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
   try {
