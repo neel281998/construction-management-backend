@@ -280,15 +280,7 @@ router.post('/:id/assign-manager', authenticateToken, requirePermission('storage
     if (!manager) {
       return res.status(404).json({
         success: false,
-        message: 'Manager not found'
-      });
-    }
-    
-    // Check if user is an inventory manager
-    if (!['inventory_manager', 'inventory_assistant'].includes(manager.role)) {
-      return res.status(400).json({
-        success: false,
-        message: 'User must be an inventory manager or assistant'
+        message: 'User not found'
       });
     }
     
@@ -390,7 +382,7 @@ router.delete('/:id/assign-manager/:managerId', authenticateToken, requirePermis
   }
 });
 
-// Get available managers for assignment
+// Get available managers for assignment (inventory_manager, inventory_assistant only)
 router.get('/available/managers', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
   try {
     const managers = await User.find({
@@ -408,6 +400,27 @@ router.get('/available/managers', authenticateToken, requirePermission('storage_
     res.status(500).json({
       success: false,
       message: 'Failed to fetch available managers'
+    });
+  }
+});
+
+// Get all users for storage site assignment (all roles - selected users get access to the site)
+router.get('/available/users', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
+  try {
+    const users = await User.find({ isActive: true })
+      .select('firstName lastName email role assignedStorageSites')
+      .sort({ role: 1, firstName: 1, lastName: 1 });
+    
+    res.json({
+      success: true,
+      data: { users }
+    });
+    
+  } catch (error) {
+    console.error('Get available users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch available users'
     });
   }
 });
