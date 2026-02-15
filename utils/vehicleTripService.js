@@ -41,6 +41,7 @@ async function createStorageInboundTrip(params) {
       referenceType: referenceType || 'inventory'
     });
     await trip.save();
+    console.log('VehicleTrip created (storage inbound):', trip.itemName, '->', trip.destinationName);
   } catch (err) {
     console.error('VehicleTrip createStorageInboundTrip error:', err);
   }
@@ -84,6 +85,7 @@ async function createPlantInboundTrip(params) {
       referenceType: 'plant_inventory'
     });
     await trip.save();
+    console.log('VehicleTrip created (plant inbound):', trip.itemName, '->', trip.destinationName);
   } catch (err) {
     console.error('VehicleTrip createPlantInboundTrip error:', err);
   }

@@ -28,8 +28,8 @@ router.get('/vehicle-trips-from-to', authenticateToken, requirePermission('vehic
 
     const dateFilter = {};
     if (startDate && endDate) {
-      dateFilter.$gte = new Date(startDate);
-      dateFilter.$lte = new Date(endDate);
+      dateFilter.$gte = new Date(startDate + 'T00:00:00.000Z');
+      dateFilter.$lte = new Date(endDate + 'T23:59:59.999Z');
     } else {
       dateFilter.$gte = defaultStart;
       dateFilter.$lte = defaultEnd;
