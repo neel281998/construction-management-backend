@@ -76,7 +76,7 @@ router.get('/', authenticateToken, requirePermission('storage_site.read'), async
 // Storage site inventory report (must be before /:id)
 router.get('/report', authenticateToken, requirePermission('storage_site.read'), async (req, res) => {
   try {
-    const { storageSiteId, category, lowStock } = req.query;
+    const { storageSiteId, category, lowStock, startDate, endDate } = req.query;
 
     let query = { isActive: true };
 
@@ -92,6 +92,18 @@ router.get('/report', authenticateToken, requirePermission('storage_site.read'),
 
     if (lowStock === 'true') {
       query.$expr = { $lte: ['$currentStock', '$minimumStock'] };
+    }
+
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate + 'T23:59:59.999Z');
+      query.$or = [
+        { lastRestocked: { $gte: start, $lte: end } },
+        { $and: [
+          { $or: [{ lastRestocked: null }, { lastRestocked: { $exists: false } }] },
+          { createdAt: { $gte: start, $lte: end } }
+        ]}
+      ];
     }
 
     const items = await Inventory.find(query)
