@@ -479,7 +479,7 @@ router.post('/receipts', authenticateToken, requirePermission('site.update'), as
       quantity,
       unit: unit || 'm³',
       qualityGrade,
-      specifications: specifications || new Map(),
+      specifications: (specifications && typeof specifications === 'object') ? specifications : {},
       deliveryDate: deliveryDate || new Date(),
       deliveryImages: deliveryImages || [],
       deliveryNotes,
@@ -504,9 +504,12 @@ router.post('/receipts', authenticateToken, requirePermission('site.update'), as
     });
   } catch (error) {
     console.error('Create inventory receipt error:', error);
+    const errMsg = error?.message || 'Failed to create inventory receipt';
+    const errName = error?.name || '';
     res.status(500).json({
       success: false,
-      message: 'Failed to create inventory receipt'
+      message: errMsg,
+      ...(process.env.NODE_ENV === 'development' && { errorName: errName, stack: error?.stack })
     });
   }
 });
