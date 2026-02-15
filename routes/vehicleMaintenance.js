@@ -1,9 +1,74 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const VehicleMaintenance = require('../models/VehicleMaintenance');
 const Vehicle = require('../models/Vehicle');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Get maintenance report - all completed maintenance across vehicles
+router.get('/report', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
+  try {
+    const { startDate, endDate, vehicleId, maintenanceType } = req.query;
+
+    const query = { status: 'completed' };
+
+    if (startDate && endDate) {
+      query.completedDate = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate + 'T23:59:59.999Z'),
+      };
+    }
+
+    if (vehicleId) {
+      query.vehicleId = mongoose.Types.ObjectId.isValid(vehicleId) ? new mongoose.Types.ObjectId(vehicleId) : vehicleId;
+    }
+
+    if (maintenanceType && maintenanceType !== 'all') {
+      query.maintenanceType = maintenanceType;
+    }
+
+    const maintenance = await VehicleMaintenance.find(query)
+      .populate('vehicleId', 'vehicleNumber vehicleType status')
+      .populate('assignedTo', 'firstName lastName')
+      .sort({ completedDate: -1 })
+      .limit(500)
+      .lean();
+
+    const rows = maintenance.map((m) => {
+      const vehicle = m.vehicleId;
+      const costTotal = m.cost?.total ?? (m.cost?.labor || 0) + (m.cost?.parts || 0) || 0;
+      return {
+        _id: m._id,
+        vehicleId: vehicle?._id,
+        vehicleNumber: vehicle?.vehicleNumber || '—',
+        vehicleType: vehicle?.vehicleType || '—',
+        maintenanceType: m.maintenanceType,
+        title: m.title,
+        description: m.description || '',
+        scheduledDate: m.scheduledDate,
+        completedDate: m.completedDate,
+        odometerReading: m.odometerReading,
+        cost: costTotal,
+        serviceProvider: m.serviceProvider?.name || '',
+        status: m.status,
+        notes: m.notes || '',
+        assignedTo: m.assignedTo ? `${m.assignedTo.firstName || ''} ${m.assignedTo.lastName || ''}`.trim() : '',
+      };
+    });
+
+    res.json({
+      success: true,
+      data: { maintenance: rows },
+    });
+  } catch (error) {
+    console.error('Get maintenance report error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch maintenance report',
+    });
+  }
+});
 
 // Get maintenance records for a vehicle
 router.get('/vehicle/:vehicleId', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
