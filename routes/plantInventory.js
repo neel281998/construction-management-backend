@@ -2,6 +2,7 @@ const express = require('express');
 const PlantInventory = require('../models/PlantInventory');
 const Plant = require('../models/Plant');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { createPlantInboundTrip } = require('../utils/vehicleTripService');
 
 const router = express.Router();
 
@@ -330,7 +331,7 @@ router.post('/:id/restock', authenticateToken, requirePermission('plant_inventor
       });
     }
     
-    const item = await PlantInventory.findById(req.params.id);
+    const item = await PlantInventory.findById(req.params.id).populate('plant', 'name');
     
     if (!item) {
       return res.status(404).json({
@@ -340,7 +341,8 @@ router.post('/:id/restock', authenticateToken, requirePermission('plant_inventor
     }
     
     // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(item.plant)) {
+    const plantIdForCheck = (item.plant && item.plant._id) ? item.plant._id : item.plant;
+    if (req.user.role !== 'admin' && (!plantIdForCheck || !req.user.assignedPlants.some(function (p) { return p && p.toString() === plantIdForCheck.toString(); }))) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant inventory item'
@@ -352,7 +354,7 @@ router.post('/:id/restock', authenticateToken, requirePermission('plant_inventor
     // Use the restock method
     await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, req.body.cost);
     
-    // Update vehicle trip tracking if vehicle is provided
+    // Update vehicle trip tracking and create VehicleTrip
     if (vehicle && vehicle._id) {
       try {
         const Vehicle = require('../models/Vehicle');
@@ -380,6 +382,18 @@ router.post('/:id/restock', authenticateToken, requirePermission('plant_inventor
       } catch (vehicleError) {
         console.error('Error updating vehicle trip tracking for plant inventory restock:', vehicleError);
         // Don't fail the restock if vehicle update fails
+      }
+      const plantObj = item.plant && item.plant._id ? { _id: item.plant._id, name: item.plant.name || 'Plant' } : null;
+      if (plantObj) {
+        createPlantInboundTrip({
+          plant: plantObj,
+          item: { _id: item._id, itemName: item.itemName, category: item.category, unit: item.unit },
+          vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
+          quantity,
+          user: req.user,
+          supplierName: supplier || (item.supplier && item.supplier.name) || 'Supplier',
+          referenceId: item._id
+        }).catch(function (err) { console.error('VehicleTrip plant restock error:', err); });
       }
     }
     
@@ -773,7 +787,7 @@ router.post('/restock', authenticateToken, requirePermission('plant_inventory.up
       });
     }
     
-    const item = await PlantInventory.findById(itemId);
+    const item = await PlantInventory.findById(itemId).populate('plant', 'name');
     
     if (!item) {
       return res.status(404).json({
@@ -783,7 +797,8 @@ router.post('/restock', authenticateToken, requirePermission('plant_inventory.up
     }
     
     // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(item.plant)) {
+    const plantIdForCheck = (item.plant && item.plant._id) ? item.plant._id : item.plant;
+    if (req.user.role !== 'admin' && (!plantIdForCheck || !req.user.assignedPlants.some(function (p) { return p && p.toString() === plantIdForCheck.toString(); }))) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant inventory item'
@@ -823,6 +838,18 @@ router.post('/restock', authenticateToken, requirePermission('plant_inventory.up
       } catch (vehicleError) {
         console.error('Error updating vehicle trip tracking for plant inventory restock:', vehicleError);
         // Don't fail the restock if vehicle update fails
+      }
+      const plantObj = item.plant && item.plant._id ? { _id: item.plant._id, name: item.plant.name || 'Plant' } : null;
+      if (plantObj) {
+        createPlantInboundTrip({
+          plant: plantObj,
+          item: { _id: item._id, itemName: item.itemName, category: item.category, unit: item.unit },
+          vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
+          quantity,
+          user: req.user,
+          supplierName: supplier || (item.supplier && item.supplier.name) || 'Supplier',
+          referenceId: item._id
+        }).catch(function (err) { console.error('VehicleTrip plant restock error:', err); });
       }
     }
     
@@ -880,7 +907,7 @@ router.post('/:itemId/add-stock', authenticateToken, requirePermission('plant_in
       });
     }
     
-    const item = await PlantInventory.findById(itemId);
+    const item = await PlantInventory.findById(itemId).populate('plant', 'name');
     if (!item) {
       return res.status(404).json({
         success: false,
@@ -889,7 +916,8 @@ router.post('/:itemId/add-stock', authenticateToken, requirePermission('plant_in
     }
     
     // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(item.plant)) {
+    const plantIdForCheck = (item.plant && item.plant._id) ? item.plant._id : item.plant;
+    if (req.user.role !== 'admin' && (!plantIdForCheck || !req.user.assignedPlants.some(function (p) { return p && p.toString() === plantIdForCheck.toString(); }))) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant inventory item'
@@ -931,6 +959,18 @@ router.post('/:itemId/add-stock', authenticateToken, requirePermission('plant_in
       } catch (vehicleError) {
         console.error('Error updating vehicle trip tracking for plant inventory add stock:', vehicleError);
         // Don't fail the add stock if vehicle update fails
+      }
+      const plantObj = item.plant && item.plant._id ? { _id: item.plant._id, name: item.plant.name || 'Plant' } : null;
+      if (plantObj) {
+        createPlantInboundTrip({
+          plant: plantObj,
+          item: { _id: item._id, itemName: item.itemName, category: item.category, unit: item.unit },
+          vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
+          quantity,
+          user: req.user,
+          supplierName: supplier || (item.supplier && item.supplier.name) || 'Supplier',
+          referenceId: item._id
+        }).catch(function (err) { console.error('VehicleTrip plant add-stock error:', err); });
       }
     }
     

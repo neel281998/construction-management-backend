@@ -9,13 +9,15 @@ const TripHistory = require('../models/TripHistory');
 const Vehicle = require('../models/Vehicle');
 const InventoryTransfer = require('../models/InventoryTransfer');
 const InventoryDispatch = require('../models/InventoryDispatch');
+const VehicleTrip = require('../models/VehicleTrip');
+const PlantOutputDispatch = require('../models/PlantOutputDispatch');
 
 const router = express.Router();
 
-// Get vehicle trips with from-to locations (merged from transfers + dispatches)
+// Get vehicle trips with from-to locations (merged from transfers, dispatches, vehicle trips, plant output dispatches)
 router.get('/vehicle-trips-from-to', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
   try {
-    const { startDate, endDate, vehicleId, fromLocationId, toLocationId, itemId } = req.query;
+    const { startDate, endDate, vehicleId, fromLocationId, toLocationId, itemId, tripType } = req.query;
 
     const now = new Date();
     const defaultEnd = new Date(now);
@@ -35,18 +37,25 @@ router.get('/vehicle-trips-from-to', authenticateToken, requirePermission('vehic
 
     const transferQuery = {};
     const dispatchQuery = {};
+    const vehicleTripQuery = {};
+    const plantOutputQuery = {};
 
     if (Object.keys(dateFilter).length) {
       transferQuery.tripDate = dateFilter;
       dispatchQuery.dispatchedAt = dateFilter;
+      vehicleTripQuery.tripDate = dateFilter;
+      plantOutputQuery.dispatchedAt = dateFilter;
     }
     if (vehicleId) {
       transferQuery['vehicle._id'] = vehicleId;
       dispatchQuery['vehicle._id'] = vehicleId;
+      vehicleTripQuery['vehicle._id'] = vehicleId;
+      plantOutputQuery['vehicle._id'] = vehicleId;
     }
     if (fromLocationId) {
       transferQuery['fromStorageSite._id'] = fromLocationId;
       dispatchQuery['fromStorageSite._id'] = fromLocationId;
+      plantOutputQuery['fromPlant._id'] = fromLocationId;
     }
     if (toLocationId) {
       transferQuery.$or = [
@@ -59,60 +68,122 @@ router.get('/vehicle-trips-from-to', authenticateToken, requirePermission('vehic
         { 'destination.id': toLocationId },
         { 'destination.id': String(toLocationId) },
       ];
+      vehicleTripQuery.destinationId = toLocationId;
+      plantOutputQuery.$or = [
+        { 'destination.id': toLocationId },
+        { 'destination.id': String(toLocationId) },
+      ];
     }
     if (itemId) {
       transferQuery.itemId = itemId;
       dispatchQuery.itemId = itemId;
+      vehicleTripQuery.itemId = itemId;
+    }
+    if (tripType && tripType === 'inbound') {
+      vehicleTripQuery.tripType = 'inbound';
     }
 
-    const [transfers, dispatches] = await Promise.all([
+    const [transfers, dispatches, vehicleTrips, plantOutputs] = await Promise.all([
       InventoryTransfer.find(transferQuery).sort({ tripDate: -1, tripNumber: -1 }).limit(500),
-      InventoryDispatch.find(dispatchQuery).sort({ dispatchedAt: -1 }).limit(500)
+      InventoryDispatch.find(dispatchQuery).sort({ dispatchedAt: -1 }).limit(500),
+      VehicleTrip.find(vehicleTripQuery).sort({ tripDate: -1 }).limit(500),
+      PlantOutputDispatch.find(plantOutputQuery).populate('receivedBy', 'firstName lastName').sort({ dispatchedAt: -1 }).limit(500)
     ]);
 
-    const formatFrom = (from) => from ? (from.name || '') + (from.code ? ` (${from.code})` : '') : '';
-    const formatTo = (to) => to?.name || '';
+    const formatFrom = (from) => from ? (from.name || '') + (from.code ? ' (' + from.code + ')' : '') : '';
+    const formatTo = (to) => (to && to.name) ? to.name : '';
 
-    const transferRows = transfers.map(t => {
-      let toName = '';
-      if (t.toStorageSite?.name) toName = t.toStorageSite.name + (t.toStorageSite.code ? ` (${t.toStorageSite.code})` : '');
-      else if (t.toPlant?.name) toName = t.toPlant.name;
-      else if (t.toConstructionSite?.name) toName = t.toConstructionSite.name + (t.toConstructionSite.siteType ? ` - ${t.toConstructionSite.siteType}` : '');
-      else if (t.toConstructionStep?.siteName) toName = `${t.toConstructionStep.siteName} - Step ${t.toConstructionStep.stepNumber || ''} ${t.toConstructionStep.stepName || ''}`.trim();
+    const transferRows = transfers.map(function (t) {
+      var toName = '';
+      if (t.toStorageSite && t.toStorageSite.name) toName = t.toStorageSite.name + (t.toStorageSite.code ? ' (' + t.toStorageSite.code + ')' : '');
+      else if (t.toPlant && t.toPlant.name) toName = t.toPlant.name;
+      else if (t.toConstructionSite && t.toConstructionSite.name) toName = t.toConstructionSite.name + (t.toConstructionSite.siteType ? ' - ' + t.toConstructionSite.siteType : '');
+      else if (t.toConstructionStep && t.toConstructionStep.siteName) toName = (t.toConstructionStep.siteName + ' - Step ' + (t.toConstructionStep.stepNumber || '') + ' ' + (t.toConstructionStep.stepName || '')).trim();
       return {
         source: 'transfer',
+        tripType: 'transfer',
         _id: t._id,
-        vehicleNumber: t.vehicle?.vehicleNumber || '',
-        vehicleType: t.vehicle?.vehicleType || '',
-        driverName: t.vehicle?.driverName || '',
+        vehicleNumber: (t.vehicle && t.vehicle.vehicleNumber) ? t.vehicle.vehicleNumber : '',
+        vehicleType: (t.vehicle && t.vehicle.vehicleType) ? t.vehicle.vehicleType : '',
+        driverName: (t.vehicle && t.vehicle.driverName) ? t.vehicle.driverName : '',
         from: formatFrom(t.fromStorageSite),
-        fromCode: t.fromStorageSite?.code || '',
+        fromCode: (t.fromStorageSite && t.fromStorageSite.code) ? t.fromStorageSite.code : '',
         to: toName,
         date: t.tripDate,
         itemName: t.itemName,
         quantity: t.quantity,
         unit: t.unit,
         status: t.status,
+        receivedBy: (t.receivedBy && (t.receivedBy.firstName || t.receivedBy.lastName)) ? ((t.receivedBy.firstName || '') + ' ' + (t.receivedBy.lastName || '')).trim() : ''
       };
     });
 
-    const dispatchRows = dispatches.map(d => ({
-      source: 'dispatch',
-      _id: d._id,
-      vehicleNumber: d.vehicle?.vehicleNumber || '',
-      vehicleType: d.vehicle?.vehicleType || '',
-      driverName: d.vehicle?.driverName || '',
-      from: formatFrom(d.fromStorageSite),
-      fromCode: d.fromStorageSite?.code || '',
-      to: formatTo(d.destination),
-      date: d.dispatchedAt,
-      itemName: d.itemName,
-      quantity: d.quantity,
-      unit: d.unit,
-      status: d.status,
-    }));
+    const dispatchRows = dispatches.map(function (d) {
+      return {
+        source: 'dispatch',
+        tripType: 'outbound',
+        _id: d._id,
+        vehicleNumber: (d.vehicle && d.vehicle.vehicleNumber) ? d.vehicle.vehicleNumber : '',
+        vehicleType: (d.vehicle && d.vehicle.vehicleType) ? d.vehicle.vehicleType : '',
+        driverName: (d.vehicle && d.vehicle.driverName) ? d.vehicle.driverName : '',
+        from: formatFrom(d.fromStorageSite),
+        fromCode: (d.fromStorageSite && d.fromStorageSite.code) ? d.fromStorageSite.code : '',
+        to: formatTo(d.destination),
+        date: d.dispatchedAt,
+        itemName: d.itemName,
+        quantity: d.quantity,
+        unit: d.unit,
+        status: d.status,
+        receivedBy: (d.receivedBy && (d.receivedBy.firstName || d.receivedBy.lastName)) ? ((d.receivedBy.firstName || '') + ' ' + (d.receivedBy.lastName || '')).trim() : ''
+      };
+    });
 
-    const merged = [...transferRows, ...dispatchRows].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const vehicleTripRows = vehicleTrips.map(function (vt) {
+      return {
+        source: 'vehicle_trip',
+        tripType: 'inbound',
+        _id: vt._id,
+        vehicleNumber: (vt.vehicle && vt.vehicle.vehicleNumber) ? vt.vehicle.vehicleNumber : '',
+        vehicleType: (vt.vehicle && vt.vehicle.vehicleType) ? vt.vehicle.vehicleType : '',
+        driverName: (vt.vehicle && vt.vehicle.driverName) ? vt.vehicle.driverName : '',
+        from: vt.sourceName || 'Supplier',
+        fromCode: '',
+        to: vt.destinationName || '',
+        date: vt.tripDate,
+        itemName: vt.itemName,
+        quantity: vt.quantity,
+        unit: vt.unit,
+        status: 'received',
+        receivedBy: (vt.receivedBy && (vt.receivedBy.firstName || vt.receivedBy.lastName)) ? ((vt.receivedBy.firstName || '') + ' ' + (vt.receivedBy.lastName || '')).trim() : ''
+      };
+    });
+
+    const plantOutputRows = plantOutputs.map(function (po) {
+      var toName = (po.destination && po.destination.name) ? po.destination.name : '';
+      return {
+        source: 'plant_output',
+        tripType: 'outbound',
+        _id: po._id,
+        vehicleNumber: (po.vehicle && po.vehicle.vehicleNumber) ? po.vehicle.vehicleNumber : '',
+        vehicleType: (po.vehicle && po.vehicle.vehicleType) ? po.vehicle.vehicleType : '',
+        driverName: (po.vehicle && po.vehicle.driverName) ? po.vehicle.driverName : '',
+        from: (po.fromPlant && po.fromPlant.name) ? po.fromPlant.name : '',
+        fromCode: '',
+        to: toName,
+        date: po.dispatchedAt,
+        itemName: po.outputName || po.materialName || '',
+        quantity: po.quantity,
+        unit: po.unit,
+        status: po.status,
+        receivedBy: (po.receivedBy && (po.receivedBy.firstName || po.receivedBy.lastName)) ? ((po.receivedBy.firstName || '') + ' ' + (po.receivedBy.lastName || '')).trim() : ''
+      };
+    });
+
+    var merged = transferRows.concat(dispatchRows).concat(vehicleTripRows).concat(plantOutputRows);
+    if (tripType && tripType !== 'all') {
+      merged = merged.filter(function (r) { return r.tripType === tripType; });
+    }
+    merged.sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
 
     res.json({
       success: true,

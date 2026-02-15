@@ -5,6 +5,7 @@ const { GridFSBucket } = require('mongodb');
 const Inventory = require('../models/Inventory');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const { logActivity, getActivityStyle } = require('../utils/activityLogger');
+const { createStorageInboundTrip } = require('../utils/vehicleTripService');
 
 const router = express.Router();
 
@@ -354,6 +355,16 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
             req.user._id
           );
           console.log(`✅ Vehicle activity recorded for new item creation in storage site: ${storageSiteDoc.name}`);
+          await createStorageInboundTrip({
+            storageSite: { _id: storageSiteDoc._id, name: storageSiteDoc.name, code: storageSiteDoc.code },
+            item: { _id: item._id, itemName: item.itemName || item.materialName, category: item.category, unit: item.unit },
+            vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
+            quantity: item.currentStock || 0,
+            user: req.user,
+            supplierName: item.supplier && item.supplier.name ? item.supplier.name : 'Supplier',
+            referenceId: item._id,
+            referenceType: 'inventory'
+          });
         }
       } catch (storageSiteError) {
         console.error('Error recording vehicle activity in storage site:', storageSiteError);
@@ -591,6 +602,16 @@ router.post(
             req.user._id
           );
           console.log(`✅ Vehicle activity recorded for storage site: ${storageSite.name}`);
+          await createStorageInboundTrip({
+            storageSite: { _id: storageSite._id, name: storageSite.name, code: storageSite.code },
+            item: { _id: item._id, itemName: item.itemName || item.materialName, category: item.category, unit: item.unit },
+            vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
+            quantity,
+            user: req.user,
+            supplierName: supplierNameForHistory,
+            referenceId: item._id,
+            referenceType: 'inventory'
+          });
         }
       } catch (storageSiteError) {
         console.error('Error recording vehicle activity in storage site:', storageSiteError);
@@ -672,7 +693,7 @@ router.post('/:id/restock', authenticateToken, requirePermission('inventory.upda
       });
     }
     
-    const item = await Inventory.findById(req.params.id);
+    const item = await Inventory.findById(req.params.id).populate('storageSite', 'name code');
     
     if (!item) {
       return res.status(404).json({
@@ -716,6 +737,22 @@ router.post('/:id/restock', authenticateToken, requirePermission('inventory.upda
       } catch (vehicleError) {
         console.error('Error updating vehicle trip tracking for restock:', vehicleError);
         // Don't fail the restock if vehicle update fails
+      }
+      if (item.storageSite) {
+        const st = item.storageSite;
+        const storageSiteObj = st && st._id ? { _id: st._id, name: st.name || '', code: st.code } : null;
+        if (storageSiteObj) {
+          createStorageInboundTrip({
+            storageSite: storageSiteObj,
+            item: { _id: item._id, itemName: item.itemName || item.materialName, category: item.category, unit: item.unit },
+            vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
+            quantity,
+            user: req.user,
+            supplierName: supplier || (item.supplier && item.supplier.name) || 'Supplier',
+            referenceId: item._id,
+            referenceType: 'inventory'
+          }).catch(function (err) { console.error('VehicleTrip restock error:', err); });
+        }
       }
     }
     
