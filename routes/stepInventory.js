@@ -466,7 +466,14 @@ router.post('/receipts', authenticateToken, requirePermission('site.update'), as
       });
     }
     
-    // Create receipt
+    // receivedBy: the logged-in user who created the receipt
+    const receivedBy = {
+      _id: req.user._id,
+      firstName: req.user.firstName || req.user.first_name || '',
+      lastName: req.user.lastName || req.user.last_name || '',
+      email: req.user.email || ''
+    };
+
     const receipt = new StepInventoryReceipt({
       stepId,
       siteId,
@@ -483,6 +490,7 @@ router.post('/receipts', authenticateToken, requirePermission('site.update'), as
       deliveryDate: deliveryDate || new Date(),
       deliveryImages: deliveryImages || [],
       deliveryNotes,
+      receivedBy,
       vehicle: vehicle ? {
         _id: vehicle._id,
         vehicleNumber: vehicle.vehicleNumber,
