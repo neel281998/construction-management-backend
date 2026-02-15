@@ -7,8 +7,128 @@ const {
 } = require('../utils/tripTracking');
 const TripHistory = require('../models/TripHistory');
 const Vehicle = require('../models/Vehicle');
+const InventoryTransfer = require('../models/InventoryTransfer');
+const InventoryDispatch = require('../models/InventoryDispatch');
 
 const router = express.Router();
+
+// Get vehicle trips with from-to locations (merged from transfers + dispatches)
+router.get('/vehicle-trips-from-to', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
+  try {
+    const { startDate, endDate, vehicleId, fromLocationId, toLocationId, itemId } = req.query;
+
+    const now = new Date();
+    const defaultEnd = new Date(now);
+    defaultEnd.setHours(23, 59, 59, 999);
+    const defaultStart = new Date(now);
+    defaultStart.setDate(defaultStart.getDate() - 30);
+    defaultStart.setHours(0, 0, 0, 0);
+
+    const dateFilter = {};
+    if (startDate && endDate) {
+      dateFilter.$gte = new Date(startDate);
+      dateFilter.$lte = new Date(endDate);
+    } else {
+      dateFilter.$gte = defaultStart;
+      dateFilter.$lte = defaultEnd;
+    }
+
+    const transferQuery = {};
+    const dispatchQuery = {};
+
+    if (Object.keys(dateFilter).length) {
+      transferQuery.tripDate = dateFilter;
+      dispatchQuery.dispatchedAt = dateFilter;
+    }
+    if (vehicleId) {
+      transferQuery['vehicle._id'] = vehicleId;
+      dispatchQuery['vehicle._id'] = vehicleId;
+    }
+    if (fromLocationId) {
+      transferQuery['fromStorageSite._id'] = fromLocationId;
+      dispatchQuery['fromStorageSite._id'] = fromLocationId;
+    }
+    if (toLocationId) {
+      transferQuery.$or = [
+        { 'toStorageSite._id': toLocationId },
+        { 'toPlant._id': toLocationId },
+        { 'toConstructionSite._id': toLocationId },
+        { 'toConstructionStep.siteId': toLocationId },
+      ];
+      dispatchQuery.$or = [
+        { 'destination.id': toLocationId },
+        { 'destination.id': String(toLocationId) },
+      ];
+    }
+    if (itemId) {
+      transferQuery.itemId = itemId;
+      dispatchQuery.itemId = itemId;
+    }
+
+    const [transfers, dispatches] = await Promise.all([
+      InventoryTransfer.find(transferQuery).sort({ tripDate: -1, tripNumber: -1 }).limit(500),
+      InventoryDispatch.find(dispatchQuery).sort({ dispatchedAt: -1 }).limit(500)
+    ]);
+
+    const formatFrom = (from) => from ? (from.name || '') + (from.code ? ` (${from.code})` : '') : '';
+    const formatTo = (to) => to?.name || '';
+
+    const transferRows = transfers.map(t => {
+      let toName = '';
+      if (t.toStorageSite?.name) toName = t.toStorageSite.name + (t.toStorageSite.code ? ` (${t.toStorageSite.code})` : '');
+      else if (t.toPlant?.name) toName = t.toPlant.name;
+      else if (t.toConstructionSite?.name) toName = t.toConstructionSite.name + (t.toConstructionSite.siteType ? ` - ${t.toConstructionSite.siteType}` : '');
+      else if (t.toConstructionStep?.siteName) toName = `${t.toConstructionStep.siteName} - Step ${t.toConstructionStep.stepNumber || ''} ${t.toConstructionStep.stepName || ''}`.trim();
+      return {
+        source: 'transfer',
+        _id: t._id,
+        vehicleNumber: t.vehicle?.vehicleNumber || '',
+        vehicleType: t.vehicle?.vehicleType || '',
+        driverName: t.vehicle?.driverName || '',
+        from: formatFrom(t.fromStorageSite),
+        fromCode: t.fromStorageSite?.code || '',
+        to: toName,
+        date: t.tripDate,
+        itemName: t.itemName,
+        quantity: t.quantity,
+        unit: t.unit,
+        status: t.status,
+      };
+    });
+
+    const dispatchRows = dispatches.map(d => ({
+      source: 'dispatch',
+      _id: d._id,
+      vehicleNumber: d.vehicle?.vehicleNumber || '',
+      vehicleType: d.vehicle?.vehicleType || '',
+      driverName: d.vehicle?.driverName || '',
+      from: formatFrom(d.fromStorageSite),
+      fromCode: d.fromStorageSite?.code || '',
+      to: formatTo(d.destination),
+      date: d.dispatchedAt,
+      itemName: d.itemName,
+      quantity: d.quantity,
+      unit: d.unit,
+      status: d.status,
+    }));
+
+    const merged = [...transferRows, ...dispatchRows].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    res.json({
+      success: true,
+      data: {
+        trips: merged,
+        totalCount: merged.length,
+      },
+    });
+  } catch (error) {
+    console.error('Get vehicle trips from-to error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch vehicle trips report',
+    });
+  }
+});
 
 // Get trip statistics for a specific vehicle
 router.get('/vehicle/:vehicleId', authenticateToken, requirePermission('vehicle.read'), async (req, res) => {
