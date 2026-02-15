@@ -37,12 +37,13 @@ router.get('/report', authenticateToken, requirePermission('vehicle.read'), asyn
 
     const rows = maintenance.map((m) => {
       const vehicle = m.vehicleId;
-      const costTotal = m.cost?.total ?? (m.cost?.labor || 0) + (m.cost?.parts || 0) || 0;
+      const c = m.cost;
+      const costTotal = (c && c.total != null) ? c.total : (Math.max(0, (c && c.labor) || 0) + Math.max(0, (c && c.parts) || 0));
       return {
         _id: m._id,
-        vehicleId: vehicle?._id,
-        vehicleNumber: vehicle?.vehicleNumber || '—',
-        vehicleType: vehicle?.vehicleType || '—',
+        vehicleId: vehicle && vehicle._id,
+        vehicleNumber: (vehicle && vehicle.vehicleNumber) || '—',
+        vehicleType: (vehicle && vehicle.vehicleType) || '—',
         maintenanceType: m.maintenanceType,
         title: m.title,
         description: m.description || '',
@@ -50,7 +51,7 @@ router.get('/report', authenticateToken, requirePermission('vehicle.read'), asyn
         completedDate: m.completedDate,
         odometerReading: m.odometerReading,
         cost: costTotal,
-        serviceProvider: m.serviceProvider?.name || '',
+        serviceProvider: (m.serviceProvider && m.serviceProvider.name) || '',
         status: m.status,
         notes: m.notes || '',
         assignedTo: m.assignedTo ? `${m.assignedTo.firstName || ''} ${m.assignedTo.lastName || ''}`.trim() : '',
