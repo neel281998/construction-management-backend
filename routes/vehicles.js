@@ -1,5 +1,6 @@
 const express = require('express');
 const Vehicle = require('../models/Vehicle');
+const Site = require('../models/Site');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 
 const router = express.Router();
@@ -19,13 +20,22 @@ router.get('/', authenticateToken, requirePermission('vehicle.read'), async (req
     // Build query
     let query = { isActive: true };
     
-    // Workers: filter by assigned sites only
+    // Workers: filter by vehicles linked to their assigned sites (Site.assignedVehicles or Vehicle.assignedSite)
     const role = (req.user.role || '').toLowerCase();
     if (role === 'worker') {
-      const assignedSites = req.user.assignedSites || [];
-      query.assignedSite = assignedSites.length
-        ? { $in: assignedSites }
-        : { $in: [] }; // No vehicles for workers with no assigned sites
+      const assignedSites = (req.user.assignedSites || []).map(s => (s && s._id) ? s._id : s);
+      if (assignedSites.length === 0) {
+        query._id = { $in: [] };
+      } else {
+        const sites = await Site.find({ _id: { $in: assignedSites } }).select('assignedVehicles').lean();
+        const vehicleIdsFromSites = (sites || [])
+          .flatMap(s => (s.assignedVehicles || []).map(a => a.vehicle).filter(Boolean));
+        const uniqueVehicleIds = [...new Set(vehicleIdsFromSites.map(id => id.toString()))];
+        query.$or = [
+          { _id: uniqueVehicleIds.length ? { $in: uniqueVehicleIds } : { $in: [] } },
+          { assignedSite: { $in: assignedSites } }
+        ];
+      }
     }
     
     // Apply filters
