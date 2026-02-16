@@ -19,9 +19,9 @@ router.get('/', authenticateToken, requirePermission('storage_site.read'), async
     // Build query based on user role
     let query = {};
     
-    // Admin and supervisor see all storage sites; others filter by assigned
+    // Admin sees all; supervisor and others see only assigned storage sites
     const role = (req.user.role || '').toLowerCase();
-    if (role !== 'admin' && role !== 'supervisor') {
+    if (role !== 'admin') {
       const assigned = req.user.assignedStorageSites || [];
       query._id = assigned.length ? { $in: assigned } : { $in: [] }; // Empty = no results
     }
@@ -84,7 +84,7 @@ router.get('/report', authenticateToken, requirePermission('storage_site.read'),
 
     if (storageSiteId) {
       query.storageSite = storageSiteId;
-    } else if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && req.user.assignedStorageSites && req.user.assignedStorageSites.length > 0) {
+    } else if (req.user.role !== 'admin' && req.user.assignedStorageSites && req.user.assignedStorageSites.length > 0) {
       query.storageSite = { $in: req.user.assignedStorageSites };
     }
 
@@ -186,9 +186,9 @@ router.get('/:id', authenticateToken, requirePermission('storage_site.read'), as
       });
     }
     
-    // Admin and supervisor can access all; others need assignment
+    // Admin can access all; supervisor and others need assignment
     const assigned = (req.user.assignedStorageSites || []).map((id) => id?.toString?.() || id);
-    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assigned.includes(storageSite._id.toString())) {
+    if (req.user.role !== 'admin' && !assigned.includes(storageSite._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this storage site'
@@ -311,9 +311,9 @@ router.put('/:id', authenticateToken, requirePermission('storage_site.update'), 
       });
     }
     
-    // Admin and supervisor can access all; others need assignment
+    // Admin can access all; supervisor and others need assignment
     const assigned = (req.user.assignedStorageSites || []).map((id) => id?.toString?.() || id);
-    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assigned.includes(storageSite._id.toString())) {
+    if (req.user.role !== 'admin' && !assigned.includes(storageSite._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this storage site'
@@ -385,9 +385,9 @@ router.post('/:id/assign-manager', authenticateToken, requirePermission('storage
       });
     }
     
-    // Admin and supervisor can access all; others need assignment
+    // Admin can access all; supervisor and others need assignment
     const assigned = (req.user.assignedStorageSites || []).map((id) => id?.toString?.() || id);
-    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assigned.includes(storageSite._id.toString())) {
+    if (req.user.role !== 'admin' && !assigned.includes(storageSite._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this storage site'
@@ -445,9 +445,9 @@ router.delete('/:id/assign-manager/:managerId', authenticateToken, requirePermis
       });
     }
     
-    // Admin and supervisor can access all; others need assignment
+    // Admin can access all; supervisor and others need assignment
     const assigned = (req.user.assignedStorageSites || []).map((id) => id?.toString?.() || id);
-    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assigned.includes(storageSite._id.toString())) {
+    if (req.user.role !== 'admin' && !assigned.includes(storageSite._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this storage site'
@@ -618,9 +618,9 @@ router.get('/:id/inventory', authenticateToken, requirePermission('storage_site.
       });
     }
     
-    // Admin and supervisor can access all; others need assignment
+    // Admin can access all; supervisor and others need assignment
     const assigned = (req.user.assignedStorageSites || []).map((id) => id?.toString?.() || id);
-    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assigned.includes(storageSite._id.toString())) {
+    if (req.user.role !== 'admin' && !assigned.includes(storageSite._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this storage site'
@@ -739,9 +739,9 @@ router.get('/:id/managers', authenticateToken, requirePermission('storage_site.r
   try {
     const { id } = req.params;
     
-    // Admin and supervisor can access all; others need assignment
+    // Admin can access all; supervisor and others need assignment
     const assigned = (req.user.assignedStorageSites || []).map((s) => s?.toString?.() || s);
-    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assigned.includes(id)) {
+    if (req.user.role !== 'admin' && !assigned.includes(id)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this storage site'
