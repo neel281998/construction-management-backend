@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requireStepUpdateAccessFromBody, requireStepUpdateAccessFromReceipt, requireStepUpdateAccessFromConsumption } = require('../middleware/auth');
 const StepInventoryReceipt = require('../models/StepInventoryReceipt');
 const StepInventoryConsumption = require('../models/StepInventoryConsumption');
 const Step = require('../models/Step');
@@ -111,7 +111,7 @@ router.get('/receipts/:receiptId', authenticateToken, requirePermission('site.re
 });
 
 // Update received quantity by step manager
-router.patch('/receipts/:receiptId/quantity', authenticateToken, requirePermission('site.update'), async (req, res) => {
+router.patch('/receipts/:receiptId/quantity', authenticateToken, requireStepUpdateAccessFromReceipt, async (req, res) => {
   try {
     const { receivedQuantity, notes } = req.body;
     
@@ -177,7 +177,7 @@ router.patch('/receipts/:receiptId/quantity', authenticateToken, requirePermissi
 });
 
 // Update received details by step manager (with images and detailed notes)
-router.patch('/receipts/:receiptId/received-details', authenticateToken, requirePermission('site.update'), async (req, res) => {
+router.patch('/receipts/:receiptId/received-details', authenticateToken, requireStepUpdateAccessFromReceipt, async (req, res) => {
   try {
     const { 
       receivedQuantity, 
@@ -306,7 +306,7 @@ router.patch('/receipts/:receiptId/received-details', authenticateToken, require
 });
 
 // Verify receipt by step manager
-router.patch('/receipts/:receiptId/verify', authenticateToken, requirePermission('site.update'), async (req, res) => {
+router.patch('/receipts/:receiptId/verify', authenticateToken, requireStepUpdateAccessFromReceipt, async (req, res) => {
   try {
     const { verified, notes } = req.body;
     
@@ -426,7 +426,7 @@ router.get('/summary/step/:stepId', authenticateToken, requirePermission('site.r
 });
 
 // Create inventory receipt
-router.post('/receipts', authenticateToken, requirePermission('site.update'), async (req, res) => {
+router.post('/receipts', authenticateToken, requireStepUpdateAccessFromBody, async (req, res) => {
   try {
     const {
       stepId,
@@ -523,7 +523,7 @@ router.post('/receipts', authenticateToken, requirePermission('site.update'), as
 });
 
 // Create inventory consumption
-router.post('/consumption', authenticateToken, requirePermission('site.update'), async (req, res) => {
+router.post('/consumption', authenticateToken, requireStepUpdateAccessFromBody, async (req, res) => {
   try {
     const {
       stepId,
@@ -608,7 +608,7 @@ router.post('/consumption', authenticateToken, requirePermission('site.update'),
 });
 
 // Verify inventory receipt
-router.patch('/receipts/:id/verify', authenticateToken, requirePermission('site.update'), async (req, res) => {
+router.patch('/receipts/:id/verify', authenticateToken, requireStepUpdateAccessFromReceipt, async (req, res) => {
   try {
     const { status, verificationNotes } = req.body;
     
@@ -644,7 +644,7 @@ router.patch('/receipts/:id/verify', authenticateToken, requirePermission('site.
 });
 
 // Verify inventory consumption
-router.patch('/consumption/:id/verify', authenticateToken, requirePermission('site.update'), async (req, res) => {
+router.patch('/consumption/:id/verify', authenticateToken, requireStepUpdateAccessFromConsumption, async (req, res) => {
   try {
     const { status, verificationNotes } = req.body;
     

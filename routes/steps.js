@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requireStepUpdateAccess } = require('../middleware/auth');
 const Step = require('../models/Step');
 const { syncStepAssignmentsToSite, syncRemoveUserFromSite } = require('../utils/siteAssignmentSync');
 
@@ -594,7 +594,7 @@ router.delete('/:id/step-manager', authenticateToken, requirePermission('step.up
 });
 
 // Update step progress with LBH values
-router.patch('/:id/progress', authenticateToken, requirePermission('site.update'), async (req, res) => {
+router.patch('/:id/progress', authenticateToken, requireStepUpdateAccess, async (req, res) => {
   try {
     const { 
       progressM3, 
@@ -605,7 +605,7 @@ router.patch('/:id/progress', authenticateToken, requirePermission('site.update'
       unit = 'm'
     } = req.body;
     
-    const step = await Step.findById(req.params.id);
+    const step = req.step || await Step.findById(req.params.id);
     if (!step) {
       return res.status(404).json({
         success: false,

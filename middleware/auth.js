@@ -223,6 +223,116 @@ const canAccessStorageSite = async (req, res, next) => {
   }
 };
 
+// Check if user can update a step (has site.update permission OR is assigned to step/site)
+const canUpdateStep = (step, user) => {
+  const role = (user.role || '').toLowerCase();
+  if (role === 'admin' || role === 'supervisor') return true;
+  const perms = Array.isArray(user.permissions) ? user.permissions : [];
+  if (perms.includes('site.update')) return true;
+  const siteId = step.siteId && step.siteId.toString();
+  const assignedSites = Array.isArray(user.assignedSites) ? user.assignedSites : [];
+  if (siteId && assignedSites.some(s => s.toString() === siteId)) return true;
+  const userId = user._id && user._id.toString();
+  if (userId && step.assignedUser && step.assignedUser.toString() === userId) return true;
+  const assigned = step.assignedUsers || [];
+  if (userId && assigned.some(a => a.user && a.user.toString() === userId)) return true;
+  return false;
+};
+
+// Allow step update if user has site.update OR is assigned to step/site
+const requireStepUpdateAccess = async (req, res, next) => {
+  try {
+    const Step = require('../models/Step');
+    const step = await Step.findById(req.params.id);
+    if (!step) {
+      return res.status(404).json({ success: false, message: 'Step not found' });
+    }
+    if (!canUpdateStep(step, req.user)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+    req.step = step;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Error checking step access' });
+  }
+};
+
+// Same check when stepId comes from body (e.g. POST /receipts, POST /consumption)
+const requireStepUpdateAccessFromBody = async (req, res, next) => {
+  try {
+    const stepId = req.body && req.body.stepId;
+    if (!stepId) {
+      return res.status(400).json({ success: false, message: 'Step ID is required' });
+    }
+    const Step = require('../models/Step');
+    const step = await Step.findById(stepId);
+    if (!step) {
+      return res.status(404).json({ success: false, message: 'Step not found' });
+    }
+    if (!canUpdateStep(step, req.user)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+    req.step = step;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Error checking step access' });
+  }
+};
+
+// Load step from receipt param (receiptId) and allow if user can update that step
+const requireStepUpdateAccessFromReceipt = async (req, res, next) => {
+  try {
+    const receiptId = req.params.receiptId || req.params.id;
+    if (!receiptId) {
+      return res.status(400).json({ success: false, message: 'Receipt ID is required' });
+    }
+    const StepInventoryReceipt = require('../models/StepInventoryReceipt');
+    const Step = require('../models/Step');
+    const receipt = await StepInventoryReceipt.findById(receiptId).select('stepId');
+    if (!receipt || !receipt.stepId) {
+      return res.status(404).json({ success: false, message: 'Receipt not found' });
+    }
+    const step = await Step.findById(receipt.stepId);
+    if (!step) {
+      return res.status(404).json({ success: false, message: 'Step not found' });
+    }
+    if (!canUpdateStep(step, req.user)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+    req.step = step;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Error checking step access' });
+  }
+};
+
+// Load step from consumption param (id) and allow if user can update that step
+const requireStepUpdateAccessFromConsumption = async (req, res, next) => {
+  try {
+    const consumptionId = req.params.id;
+    if (!consumptionId) {
+      return res.status(400).json({ success: false, message: 'Consumption ID is required' });
+    }
+    const StepInventoryConsumption = require('../models/StepInventoryConsumption');
+    const Step = require('../models/Step');
+    const consumption = await StepInventoryConsumption.findById(consumptionId).select('stepId');
+    if (!consumption || !consumption.stepId) {
+      return res.status(404).json({ success: false, message: 'Consumption not found' });
+    }
+    const step = await Step.findById(consumption.stepId);
+    if (!step) {
+      return res.status(404).json({ success: false, message: 'Step not found' });
+    }
+    if (!canUpdateStep(step, req.user)) {
+      return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+    }
+    req.step = step;
+    next();
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Error checking step access' });
+  }
+};
+
 module.exports = {
   authenticateToken,
   requirePermission,
@@ -230,5 +340,9 @@ module.exports = {
   requireAdmin,
   requireAdminOrSupervisor,
   canAccessSite,
-  canAccessStorageSite
+  canAccessStorageSite,
+  requireStepUpdateAccess,
+  requireStepUpdateAccessFromBody,
+  requireStepUpdateAccessFromReceipt,
+  requireStepUpdateAccessFromConsumption
 };
