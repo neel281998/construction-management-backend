@@ -189,6 +189,9 @@ const ADMIN_PERMISSIONS = [
   'report.generate', 'report.export'
 ];
 
+// Worker: site and vehicle read only (site-based filtering applied in APIs)
+const WORKER_PERMISSIONS = ['site.read', 'vehicle.read'];
+
 // Supervisor: all permissions except delete (no *.delete)
 const SUPERVISOR_PERMISSIONS = [
   'user.create', 'user.read', 'user.update',
@@ -220,6 +223,12 @@ userSchema.pre('save', function(next) {
   // Supervisor: all except delete
   if (this.role === 'supervisor' && (!this.permissions || this.permissions.length === 0)) {
     this.permissions = SUPERVISOR_PERMISSIONS;
+    this.hasCustomPermissions = false;
+  }
+
+  // Worker: site.read and vehicle.read (site-based filtering in APIs)
+  if (this.role === 'worker' && (!this.permissions || this.permissions.length === 0)) {
+    this.permissions = WORKER_PERMISSIONS;
     this.hasCustomPermissions = false;
   }
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const Site = require('../models/Site');
 const Step = require('../models/Step');
+const { syncStepAssignmentsToSite } = require('../utils/siteAssignmentSync');
 const SiteInventory = require('../models/SiteInventory');
 const { authenticateToken, requirePermission, canAccessSite } = require('../middleware/auth');
 const { logActivity, getActivityStyle } = require('../utils/activityLogger');
@@ -26,13 +27,16 @@ router.get('/', authenticateToken, requirePermission('site.read'), cacheMiddlewa
     // Build query
     let query = { isActive: true };
     
-    // Role-based filtering: admin and supervisor see all sites; others filtered by siteManager/assignedStaff
+    // Role-based filtering: admin and supervisor see all sites; others filtered by siteManager/assignedStaff/assignedSites
     const role = (req.user.role || '').toLowerCase();
     if (role !== 'admin' && role !== 'supervisor') {
       const filterConditions = [
         { siteManager: req.user._id },
         { 'assignedStaff.user': req.user._id }
       ];
+      if (req.user.assignedSites?.length) {
+        filterConditions.push({ _id: { $in: req.user.assignedSites } });
+      }
       query.$or = filterConditions;
     }
     
@@ -383,7 +387,14 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     if (stepData && stepData.length > 0) {
       // Use provided step data with dimensions
       steps = await createStepsWithData(site._id, siteTypesArray, stepData, site.estimatedVolumeM3);
-      
+      // Sync step assignedUsers to Site.assignedStaff and User.assignedSites
+      const allAssignedUserIds = stepData
+        .flatMap(s => s.assignedUsers || [])
+        .map(u => (typeof u === 'object' && u.user) ? u.user : u)
+        .filter(Boolean);
+      if (allAssignedUserIds.length) {
+        await syncStepAssignmentsToSite(site._id, allAssignedUserIds);
+      }
       // Calculate total site volume from step volumes
       const totalStepVolume = stepData.reduce((sum, step) => sum + (step.estimatedVolumeM3 || 0), 0);
       if (totalStepVolume > 0) {

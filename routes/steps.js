@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const Step = require('../models/Step');
+const { syncStepAssignmentsToSite, syncRemoveUserFromSite } = require('../utils/siteAssignmentSync');
 
 // Get all steps for a site
 router.get('/site/:siteId', authenticateToken, requirePermission('site.read'), async (req, res) => {
@@ -382,7 +383,8 @@ router.post('/:id/assign-users', authenticateToken, requirePermission('step.upda
     
     step.assignedUsers = step.assignedUsers.concat(newAssignments);
     await step.save();
-    
+    // Sync to Site.assignedStaff and User.assignedSites
+    await syncStepAssignmentsToSite(step.siteId, userIds);
     await step.populate('assignedUsers.user', 'firstName lastName email role');
     
     res.json({
@@ -419,6 +421,7 @@ router.delete('/:id/assign-users/:userId', authenticateToken, requirePermission(
     );
     
     await step.save();
+    await syncRemoveUserFromSite(step.siteId, userId);
     await step.populate('assignedUsers.user', 'firstName lastName email role');
     
     res.json({

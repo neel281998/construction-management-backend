@@ -19,7 +19,14 @@ router.get('/', authenticateToken, requirePermission('vehicle.read'), async (req
     // Build query
     let query = { isActive: true };
     
-    // Supervisors see all vehicles (same as admin); only regular users are filtered by assigned sites
+    // Workers: filter by assigned sites only
+    const role = (req.user.role || '').toLowerCase();
+    if (role === 'worker') {
+      const assignedSites = req.user.assignedSites || [];
+      query.assignedSite = assignedSites.length
+        ? { $in: assignedSites }
+        : { $in: [] }; // No vehicles for workers with no assigned sites
+    }
     
     // Apply filters
     if (status && status !== 'all') {
