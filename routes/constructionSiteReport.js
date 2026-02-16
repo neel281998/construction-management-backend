@@ -116,8 +116,12 @@ router.get('/', authenticateToken, requireAdminOrSupervisor, async (req, res) =>
       receivedByName: r.receivedBy ? `${r.receivedBy.firstName || ''} ${r.receivedBy.lastName || ''}`.trim() : ''
     }));
 
-    // Sites list for filter dropdown
-    const sites = await Site.find({ _id: { $in: siteIds } }).select('_id name').lean();
+    // Sites list for filter dropdown (all accessible sites, not just filtered)
+    const sitesQuery = { status: { $in: ['active', 'on_hold', 'planning', 'completed'] } };
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor') {
+      sitesQuery._id = { $in: req.user.assignedSites || [] };
+    }
+    const sites = await Site.find(sitesQuery).select('_id name').sort({ name: 1 }).lean();
 
     res.json({
       success: true,
