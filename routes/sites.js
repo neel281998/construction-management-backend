@@ -291,6 +291,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       expectedEndDate, 
       estimatedVolumeM3,
       siteManagerId,
+      siteSupervisorIds,
       inventoryManagerId,
       assignedVehicleIds,
       projectDimensions,
@@ -353,6 +354,14 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       });
     }
     
+    const supervisorIds = Array.isArray(siteSupervisorIds) ? siteSupervisorIds : (siteManagerId ? [siteManagerId] : []);
+    const siteManagerPrimary = supervisorIds[0] || siteManagerId || null;
+    const assignedStaffSupervisors = supervisorIds.map(id => ({
+      user: id,
+      assignedDate: new Date(),
+      role: 'supervisor'
+    }));
+
     const siteData = {
       name,
       siteTypes: siteTypesArray,
@@ -362,15 +371,16 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       startDate,
       expectedEndDate,
       estimatedVolumeM3,
-      siteManager: siteManagerId || null,
+      siteManager: siteManagerPrimary,
       inventoryManager: inventoryManagerId || null,
       projectDimensions: finalProjectDimensions,
+      assignedStaff: assignedStaffSupervisors,
       assignedVehicles: assignedVehicleIds ? assignedVehicleIds.map(vehicleId => ({
         vehicle: vehicleId,
         assignedDate: new Date()
       })) : []
     };
-    
+
     const site = new Site(siteData);
     
     // Calculate project volume from dimensions
@@ -382,7 +392,13 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     }
     
     await site.save();
-    
+
+    // Sync supervisors to User.assignedSites so they can access the site
+    const User = require('../models/User');
+    for (const id of supervisorIds) {
+      if (id) await User.findByIdAndUpdate(id, { $addToSet: { assignedSites: site._id } });
+    }
+
     let steps = [];
     let postCreateWarning = null;
 
@@ -755,19 +771,35 @@ router.put('/:id', authenticateToken, requirePermission('site.update'), async (r
       });
     }
     
-    // Check permissions: admin/supervisor or site manager
+    // Check permissions: admin/supervisor or site manager or assigned staff
     const role = (req.user.role || '').toLowerCase();
-    if (role !== 'admin' && role !== 'supervisor' && site.siteManager.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
+    if (role !== 'admin' && role !== 'supervisor') {
+      const isManager = site.siteManager && site.siteManager.toString() === req.user._id.toString();
+      const inStaff = site.assignedStaff && site.assignedStaff.some(s => s.user && (s.user._id || s.user).toString() === req.user._id.toString());
+      if (!isManager && !inStaff) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied'
+        });
+      }
     }
-    
-    // Update site fields
-    Object.assign(site, req.body);
+
+    const { siteSupervisorIds, ...restBody } = req.body;
+    Object.assign(site, restBody);
+
+    if (siteSupervisorIds !== undefined) {
+      const ids = Array.isArray(siteSupervisorIds) ? siteSupervisorIds : [];
+      const existingNonSupervisors = (site.assignedStaff || []).filter(s => s.role !== 'supervisor');
+      site.assignedStaff = [...existingNonSupervisors, ...ids.map(id => ({ user: id, assignedDate: new Date(), role: 'supervisor' }))];
+      site.siteManager = ids[0] || null;
+      const User = require('../models/User');
+      for (const id of ids) {
+        if (id) await User.findByIdAndUpdate(id, { $addToSet: { assignedSites: site._id } });
+      }
+    }
+
     await site.save();
-    
+
     // Populate references
     await site.populate(['siteManager', 'assignedStaff.user', 'assignedVehicles.vehicle']);
     
