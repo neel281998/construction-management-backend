@@ -10,8 +10,9 @@ const router = express.Router();
 // Get all plants
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    // Check permissions
-    if (!req.user.permissions.includes('plant.read') && req.user.role !== 'admin') {
+    // Check permissions - admin and supervisor bypass; others need plant.read
+    const role = (req.user.role || '').toLowerCase();
+    if (role !== 'admin' && role !== 'supervisor' && !req.user.permissions?.includes('plant.read')) {
       return res.status(403).json({
         success: false,
         message: 'Insufficient permissions'
@@ -29,13 +30,13 @@ router.get('/', authenticateToken, async (req, res) => {
     // Build query
     let query = {};
     
-    // Apply plant access control for non-admin users
-    if (req.user.role !== 'admin') {
+    // Admin and supervisor see all plants; others filter by assigned plants
+    if (role !== 'admin' && role !== 'supervisor') {
       const assignedPlants = req.user.assignedPlants || [];
       if (assignedPlants.length === 0) {
-        return res.status(403).json({
-          success: false,
-          message: 'No plants assigned to user'
+        return res.json({
+          success: true,
+          data: { plants: [], pagination: { currentPage: 1, totalPages: 0, totalCount: 0, hasNext: false, hasPrev: false } }
         });
       }
       query._id = { $in: assignedPlants };
@@ -106,8 +107,9 @@ router.get('/:id', authenticateToken, requirePermission('plant.read'), async (re
       });
     }
     
-    // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plant._id)) {
+    // Check access control - admin and supervisor can access all; others need assignment
+    const assignedPlants = (req.user.assignedPlants || []).map((id) => id?.toString?.() || id);
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assignedPlants.includes(plant._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant'
@@ -236,8 +238,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
     
-    // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plant._id)) {
+    // Check access control - admin and supervisor can access all; others need assignment
+    const assignedPlants = (req.user.assignedPlants || []).map((id) => id?.toString?.() || id);
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assignedPlants.includes(plant._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant'
@@ -288,8 +291,9 @@ router.delete('/:id', authenticateToken, requirePermission('plant.delete'), asyn
       });
     }
     
-    // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plant._id)) {
+    // Check access control - admin and supervisor can access all; others need assignment
+    const assignedPlants = (req.user.assignedPlants || []).map((id) => id?.toString?.() || id);
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assignedPlants.includes(plant._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant'
@@ -334,8 +338,9 @@ router.post('/:id/managers', authenticateToken, requirePermission('plant.update'
       });
     }
     
-    // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plant._id)) {
+    // Check access control - admin and supervisor can access all; others need assignment
+    const assignedPlants = (req.user.assignedPlants || []).map((id) => id?.toString?.() || id);
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assignedPlants.includes(plant._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant'
@@ -398,8 +403,9 @@ router.delete('/:id/managers/:managerId', authenticateToken, requirePermission('
       });
     }
     
-    // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plant._id)) {
+    // Check access control - admin and supervisor can access all; others need assignment
+    const assignedPlants = (req.user.assignedPlants || []).map((id) => id?.toString?.() || id);
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assignedPlants.includes(plant._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant'
@@ -458,8 +464,9 @@ router.get('/:id/analytics', authenticateToken, requirePermission('plant.read'),
       });
     }
     
-    // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plant._id)) {
+    // Check access control - admin and supervisor can access all; others need assignment
+    const assignedPlants = (req.user.assignedPlants || []).map((id) => id?.toString?.() || id);
+    if (req.user.role !== 'admin' && req.user.role !== 'supervisor' && !assignedPlants.includes(plant._id.toString())) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant'
