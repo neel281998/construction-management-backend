@@ -39,6 +39,7 @@ const fuelManagementRoutes = require('./routes/fuelManagement');
 const vehicleAnalyticsRoutes = require('./routes/vehicleAnalytics');
 const vehicleMaintenanceRoutes = require('./routes/vehicleMaintenance');
 const plantReportsRoutes = require('./routes/plantReports');
+const constructionSiteReportRoutes = require('./routes/constructionSiteReport');
 const { initializeCronJobs } = require('./utils/cronJobs');
  
 // Load environment variables
@@ -203,6 +204,7 @@ app.use('/api/fuel', fuelManagementRoutes);
 app.use('/api/vehicle-analytics', vehicleAnalyticsRoutes);
 app.use('/api/vehicle-maintenance', vehicleMaintenanceRoutes);
 app.use('/api/plant-reports', plantReportsRoutes);
+app.use('/api/construction-site-reports', constructionSiteReportRoutes);
 
 // Health check endpoint - Updated to include database status
 app.get('/api/health', (req, res) => {
