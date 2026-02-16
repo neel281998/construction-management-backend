@@ -383,54 +383,50 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     await site.save();
     
-    // Update vehicle statuses to 'in_use' if vehicles are assigned
-    if (assignedVehicleIds && assignedVehicleIds.length > 0) {
-      const Vehicle = require('../models/Vehicle');
-      await Vehicle.updateMany(
-        { _id: { $in: assignedVehicleIds } },
-        { status: 'in_use' }
-      );
-    }
-    
-    // Create steps for the site
-    const { createStepsForSite } = require('../config/stepConfigurations');
     let steps = [];
-    
-    if (stepData && stepData.length > 0) {
-      // Use provided step data with dimensions
-      steps = await createStepsWithData(site._id, siteTypesArray, stepData, site.estimatedVolumeM3);
-      // Sync step assignedUsers to Site.assignedStaff and User.assignedSites
-      const allAssignedUserIds = stepData
-        .flatMap(s => s.assignedUsers || [])
-        .map(u => (typeof u === 'object' && u.user) ? u.user : u)
-        .filter(Boolean);
-      if (allAssignedUserIds.length) {
-        await syncStepAssignmentsToSite(site._id, allAssignedUserIds);
+    let postCreateWarning = null;
+
+    try {
+      // Update vehicle statuses to 'in_use' if vehicles are assigned
+      if (assignedVehicleIds && assignedVehicleIds.length > 0) {
+        const Vehicle = require('../models/Vehicle');
+        await Vehicle.updateMany(
+          { _id: { $in: assignedVehicleIds } },
+          { status: 'in_use' }
+        );
       }
-      // Calculate total site volume from step volumes
-      const totalStepVolume = stepData.reduce((sum, step) => sum + (step.estimatedVolumeM3 || 0), 0);
-      if (totalStepVolume > 0) {
-        site.estimatedVolumeM3 = totalStepVolume;
-        await site.save();
+      
+      // Create steps for the site
+      const { createStepsForSite } = require('../config/stepConfigurations');
+      
+      if (stepData && stepData.length > 0) {
+        steps = await createStepsWithData(site._id, siteTypesArray, stepData, site.estimatedVolumeM3);
+        const allAssignedUserIds = stepData
+          .flatMap(s => s.assignedUsers || [])
+          .map(u => (typeof u === 'object' && u.user) ? u.user : u)
+          .filter(Boolean);
+        if (allAssignedUserIds.length) {
+          await syncStepAssignmentsToSite(site._id, allAssignedUserIds);
+        }
+        const totalStepVolume = stepData.reduce((sum, step) => sum + (step.estimatedVolumeM3 || 0), 0);
+        if (totalStepVolume > 0) {
+          site.estimatedVolumeM3 = totalStepVolume;
+          await site.save();
+        }
       } else {
-        // If no volumes provided, don't distribute - let StepWiseForm calculate them
-        // Don't distribute volumes - let the StepWiseForm calculate them from LBH
-        // This ensures users enter actual dimensions instead of getting arbitrary distributed volumes
+        for (const siteType of siteTypesArray) {
+          const typeSteps = await createStepsForSite(site._id, siteType);
+          steps = steps.concat(typeSteps);
+        }
       }
-    } else {
-      // Use default step creation for each site type
-      for (const siteType of siteTypesArray) {
-        const typeSteps = await createStepsForSite(site._id, siteType);
-        steps = steps.concat(typeSteps);
-      }
+      
+      await createSiteInventory(site._id, steps, req.user._id);
+      const progressResult = await site.calculateOverallProgress();
+      await site.save();
+    } catch (postError) {
+      console.error('Post-create setup error (site was saved):', postError);
+      postCreateWarning = 'Site created. Some setup steps may need attention.';
     }
-    
-    // Create inventory items for each step
-    await createSiteInventory(site._id, steps, req.user._id);
-    
-    // Calculate initial progress based on created steps
-    const progressResult = await site.calculateOverallProgress();
-    await site.save();
     
     // Populate the response
     await site.populate([
@@ -460,7 +456,7 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
     
     res.status(201).json({
       success: true,
-      message: 'Site created successfully with steps',
+      message: postCreateWarning || 'Site created successfully with steps',
       data: { site }
     });
     
@@ -550,13 +546,11 @@ async function createStepsWithData(siteId, siteTypes, stepDataArray, siteEstimat
           completedVolume: 0,
           volumeUnit: 'm³'
         },
-        // Assign users if provided
-        assignedUsers: stepData.assignedUsers ? stepData.assignedUsers.map(userId => ({
-          user: userId,
-          assignedDate: new Date(),
-          role: 'worker',
-          isActive: true
-        })) : [],
+        // Assign users if provided (support both IDs and { _id } objects)
+        assignedUsers: (stepData.assignedUserIds || stepData.assignedUsers || []).map(u => {
+          const userId = typeof u === 'object' && u?._id ? u._id : u;
+          return userId ? { user: userId, assignedDate: new Date(), role: 'worker', isActive: true } : null;
+        }).filter(Boolean),
         // Store the site type this step belongs to
         siteType: stepData.siteType || siteTypes[0],
         status: 'pending'
