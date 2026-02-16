@@ -27,9 +27,21 @@ router.get('/', authenticateToken, requirePermission('site.read'), cacheMiddlewa
     // Build query
     let query = { isActive: true };
     
-    // Role-based filtering: admin and supervisor see all sites; others filtered by siteManager/assignedStaff/assignedSites
+    // Role-based filtering: admin sees all; supervisor sees assigned sites only; others filtered by siteManager/assignedStaff/assignedSites
     const role = (req.user.role || '').toLowerCase();
-    if (role !== 'admin' && role !== 'supervisor') {
+    if (role === 'admin') {
+      // Admin sees all sites
+    } else if (role === 'supervisor') {
+      // Supervisor sees only assigned sites (or sites where they are siteManager/assignedStaff)
+      const filterConditions = [
+        { siteManager: req.user._id },
+        { 'assignedStaff.user': req.user._id }
+      ];
+      if (req.user.assignedSites?.length) {
+        filterConditions.push({ _id: { $in: req.user.assignedSites } });
+      }
+      query.$or = filterConditions;
+    } else {
       const filterConditions = [
         { siteManager: req.user._id },
         { 'assignedStaff.user': req.user._id }
