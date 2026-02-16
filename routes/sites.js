@@ -401,12 +401,20 @@ router.post('/', authenticateToken, requirePermission('site.create'), async (req
       
       if (stepData && stepData.length > 0) {
         steps = await createStepsWithData(site._id, siteTypesArray, stepData, site.estimatedVolumeM3);
-        const allAssignedUserIds = stepData
-          .flatMap(s => s.assignedUsers || [])
-          .map(u => (typeof u === 'object' && u.user) ? u.user : u)
-          .filter(Boolean);
-        if (allAssignedUserIds.length) {
-          await syncStepAssignmentsToSite(site._id, allAssignedUserIds);
+        // Extract user IDs from stepData: support assignedUsers (objects with .user or ._id) and assignedUserIds (raw ids)
+        const allAssignedUserIds = [
+          ...stepData.flatMap(s => (s.assignedUsers || []).map(u => {
+            if (typeof u === 'object' && u != null) {
+              if (u.user) return u.user; // step format { user: id }
+              if (u._id) return u._id;     // frontend format { _id: string, ... }
+            }
+            return u; // already a string/id
+          })),
+          ...stepData.flatMap(s => (s.assignedUserIds || []))
+        ].filter(Boolean).map(id => id && id.toString ? id.toString() : id);
+        const uniqueIds = [...new Set(allAssignedUserIds)];
+        if (uniqueIds.length) {
+          await syncStepAssignmentsToSite(site._id, uniqueIds);
         }
         const totalStepVolume = stepData.reduce((sum, step) => sum + (step.estimatedVolumeM3 || 0), 0);
         if (totalStepVolume > 0) {
