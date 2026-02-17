@@ -3,35 +3,39 @@ const mongoose = require('mongoose');
 const vehicleSchema = new mongoose.Schema({
   vehicleNumber: {
     type: String,
-    required: [true, 'Vehicle number is required'],
+    required: false,
     unique: true,
     trim: true
   },
   type: {
     type: String,
-    required: [true, 'Vehicle type is required'],
+    required: false,
     enum: {
       values: ['truck', 'excavator', 'crane', 'bulldozer', 'mixer', 'loader', 'dump_truck', 'other'],
       message: 'Invalid vehicle type'
-    }
+    },
+    default: 'other'
   },
   brand: {
     type: String,
-    required: [true, 'Brand is required'],
+    required: false,
     trim: true,
-    maxlength: [50, 'Brand cannot exceed 50 characters']
+    maxlength: [50, 'Brand cannot exceed 50 characters'],
+    default: ''
   },
   model: {
     type: String,
-    required: [true, 'Model is required'],
+    required: false,
     trim: true,
-    maxlength: [50, 'Model cannot exceed 50 characters']
+    maxlength: [50, 'Model cannot exceed 50 characters'],
+    default: ''
   },
   year: {
     type: Number,
-    required: [true, 'Year is required'],
+    required: false,
     min: [1990, 'Year must be 1990 or later'],
-    max: [new Date().getFullYear() + 1, 'Year cannot be in the future']
+    max: [new Date().getFullYear() + 1, 'Year cannot be in the future'],
+    default: () => new Date().getFullYear()
   },
   status: {
     type: String,
@@ -80,7 +84,8 @@ const vehicleSchema = new mongoose.Schema({
   maintenanceSchedule: {
     nextService: {
       type: Date,
-      required: [true, 'Next service date is required']
+      required: false,
+      default: null
     },
     lastService: {
       type: Date,
@@ -217,6 +222,14 @@ const vehicleSchema = new mongoose.Schema({
   timestamps: true,
   toJSON: { virtuals: true },
   toObject: { virtuals: true }
+});
+
+// Generate unique vehicle number when not provided
+vehicleSchema.pre('save', function(next) {
+  if (!this.vehicleNumber || !String(this.vehicleNumber).trim()) {
+    this.vehicleNumber = 'VEH-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+  }
+  next();
 });
 
 // Virtual for maintenance status
