@@ -1,7 +1,7 @@
 const express = require('express');
 const PlantInventory = require('../models/PlantInventory');
 const Plant = require('../models/Plant');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requirePlantInventoryRead } = require('../middleware/auth');
 const { createPlantInboundTrip } = require('../utils/vehicleTripService');
 
 const router = express.Router();
@@ -45,16 +45,8 @@ const recalculateConsumptionRates = (item) => {
 };
 
 // Get all plant inventory items
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, requirePlantInventoryRead, async (req, res) => {
   try {
-    // Check permissions - allow admin or users with plant_inventory.read permission
-    if (req.user.role !== 'admin' && !req.user.permissions.includes('plant_inventory.read')) {
-      return res.status(403).json({
-        success: false,
-        message: 'Insufficient permissions to read plant inventory'
-      });
-    }
-
     const {
       page = 1,
       limit = 10,
@@ -92,7 +84,7 @@ router.get('/', authenticateToken, async (req, res) => {
     if (plantId && plantId !== 'all') {
       // For non-admin users, ensure they can only access assigned plants
       if (req.user.role !== 'admin') {
-        const assignedPlants = req.user.assignedPlants || [];
+        const assignedPlants = (req.user.assignedPlants || []).map((id) => (id && id.toString ? id.toString() : id));
         if (!assignedPlants.includes(plantId)) {
           return res.status(403).json({
             success: false,
@@ -164,7 +156,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get single plant inventory item
-router.get('/:id', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
+router.get('/:id', authenticateToken, requirePlantInventoryRead, async (req, res) => {
   try {
     const item = await PlantInventory.findById(req.params.id)
       .populate('plant', 'name plantType');
@@ -533,7 +525,7 @@ router.put('/:id/consumption-rates', authenticateToken, requirePermission('plant
 });
 
 // Get low stock items
-router.get('/alerts/low-stock', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
+router.get('/alerts/low-stock', authenticateToken, requirePlantInventoryRead, async (req, res) => {
   try {
     let query = {
       isActive: true,
@@ -574,7 +566,7 @@ router.get('/alerts/low-stock', authenticateToken, requirePermission('plant_inve
 });
 
 // Get plant inventory categories
-router.get('/meta/categories', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
+router.get('/meta/categories', authenticateToken, requirePlantInventoryRead, async (req, res) => {
   try {
     const validCategories = [
       'Cement',
@@ -603,7 +595,7 @@ router.get('/meta/categories', authenticateToken, requirePermission('plant_inven
 });
 
 // Get material types
-router.get('/meta/material-types', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
+router.get('/meta/material-types', authenticateToken, requirePlantInventoryRead, async (req, res) => {
   try {
     const materialTypes = [
       { value: 'raw_material', label: 'Raw Material' },

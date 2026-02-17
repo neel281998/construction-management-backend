@@ -7,12 +7,12 @@ const Vehicle = require('../models/Vehicle');
 const Site = require('../models/Site');
 const StorageSite = require('../models/StorageSite');
 const StepInventoryReceipt = require('../models/StepInventoryReceipt');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requirePlantOutputRead } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Get all plant output dispatch history
-router.get('/', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const { page = 1, limit = 50, status } = req.query;
     
@@ -612,7 +612,7 @@ router.post('/receive', authenticateToken, requirePermission('plant_output.updat
 });
 
 // Get dispatch history for a plant
-router.get('/plant/:plantId', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/plant/:plantId', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
     
@@ -678,7 +678,7 @@ router.get('/plant/:plantId', authenticateToken, requirePermission('plant_output
 });
 
 // Get pending dispatches for a destination
-router.get('/pending/:destinationType/:destinationId', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/pending/:destinationType/:destinationId', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const { destinationType, destinationId } = req.params;
     const { page = 1, limit = 10 } = req.query;
@@ -726,7 +726,7 @@ router.get('/pending/:destinationType/:destinationId', authenticateToken, requir
 });
 
 // Get all dispatches for a destination (including received ones)
-router.get('/destination/:destinationType/:destinationId', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/destination/:destinationType/:destinationId', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const { destinationType, destinationId } = req.params;
     const { page = 1, limit = 10, status } = req.query;
@@ -779,7 +779,7 @@ router.get('/destination/:destinationType/:destinationId', authenticateToken, re
 });
 
 // Get receipt history for a dispatch
-router.get('/:dispatchId/receipts', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/:dispatchId/receipts', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const { dispatchId } = req.params;
     
@@ -805,7 +805,7 @@ router.get('/:dispatchId/receipts', authenticateToken, requirePermission('plant_
 });
 
 // Get receipts for a specific destination (construction site or step)
-router.get('/receipts/destination/:destinationType/:destinationId', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/receipts/destination/:destinationType/:destinationId', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const { destinationType, destinationId } = req.params;
     const { page = 1, limit = 10 } = req.query;

@@ -1,7 +1,7 @@
 const express = require('express');
 const PlantInventory = require('../models/PlantInventory');
 const PlantOutput = require('../models/PlantOutput');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requirePlantInventoryRead, requirePlantOutputRead } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -12,7 +12,7 @@ const locationStr = (addr) => {
 };
 
 // Plant Inventory Report
-router.get('/inventory', authenticateToken, requirePermission('plant_inventory.read'), async (req, res) => {
+router.get('/inventory', authenticateToken, requirePlantInventoryRead, async (req, res) => {
   try {
     const { plantId, category, materialType, lowStock, startDate, endDate } = req.query;
 
@@ -106,7 +106,7 @@ router.get('/inventory', authenticateToken, requirePermission('plant_inventory.r
 });
 
 // Plant Output Report
-router.get('/output', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/output', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const { plantId, materialType, status, startDate, endDate } = req.query;
 

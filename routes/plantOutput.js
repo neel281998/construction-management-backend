@@ -2,21 +2,13 @@ const express = require('express');
 const PlantOutput = require('../models/PlantOutput');
 const PlantInventory = require('../models/PlantInventory');
 const Plant = require('../models/Plant');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requirePlantOutputRead } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Get all plant output records
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
-    // Check permissions - allow admin or users with plant_output.read permission
-    if (req.user.role !== 'admin' && !req.user.permissions.includes('plant_output.read')) {
-      return res.status(403).json({
-        success: false,
-        message: 'Insufficient permissions to read plant output'
-      });
-    }
-
     const {
       page = 1,
       limit = 10,
@@ -46,7 +38,7 @@ router.get('/', authenticateToken, async (req, res) => {
     if (plantId && plantId !== 'all') {
       // For non-admin users, ensure they can only access assigned plants
       if (req.user.role !== 'admin') {
-        const assignedPlants = req.user.assignedPlants || [];
+        const assignedPlants = (req.user.assignedPlants || []).map((id) => (id && id.toString ? id.toString() : id));
         if (!assignedPlants.includes(plantId)) {
           return res.status(403).json({
             success: false,
@@ -108,7 +100,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get single plant output record
-router.get('/:id', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/:id', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const output = await PlantOutput.findById(req.params.id)
       .populate('plant', 'name plantType')
@@ -125,7 +117,9 @@ router.get('/:id', authenticateToken, requirePermission('plant_output.read'), as
     }
     
     // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(output.plant._id)) {
+    const assignedPlants = (req.user.assignedPlants || []).map((id) => (id && id.toString ? id.toString() : id));
+    const plantIdStr = output.plant && (output.plant._id ? output.plant._id.toString() : output.plant.toString());
+    if (req.user.role !== 'admin' && !assignedPlants.includes(plantIdStr)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant output record'
@@ -438,13 +432,14 @@ router.put('/:id', authenticateToken, requirePermission('plant_output.update'), 
 });
 
 // Get production summary for a plant
-router.get('/summary/:plantId', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/summary/:plantId', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const { plantId } = req.params;
     const { startDate, endDate } = req.query;
     
     // Check access control for non-admin users
-    if (req.user.role !== 'admin' && !req.user.assignedPlants.includes(plantId)) {
+    const assignedPlants = (req.user.assignedPlants || []).map((id) => (id && id.toString ? id.toString() : id));
+    if (req.user.role !== 'admin' && !assignedPlants.includes(plantId)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied to this plant'
@@ -507,7 +502,7 @@ router.get('/summary/:plantId', authenticateToken, requirePermission('plant_outp
 });
 
 // Get output types
-router.get('/meta/output-types', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/meta/output-types', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const outputTypes = [
       { value: 'concrete', label: 'Concrete' },
@@ -530,7 +525,7 @@ router.get('/meta/output-types', authenticateToken, requirePermission('plant_out
 });
 
 // Get quality test types
-router.get('/meta/quality-test-types', authenticateToken, requirePermission('plant_output.read'), async (req, res) => {
+router.get('/meta/quality-test-types', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
     const testTypes = [
       { value: 'compressive_strength', label: 'Compressive Strength' },

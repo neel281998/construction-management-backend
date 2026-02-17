@@ -333,6 +333,36 @@ const requireStepUpdateAccessFromConsumption = async (req, res, next) => {
   }
 };
 
+// Allow plant inventory read: admin, supervisor, plant_inventory.read, or assigned to plants
+const requirePlantInventoryRead = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+  const role = (req.user.role || '').toLowerCase();
+  const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+  const assignedPlants = req.user.assignedPlants || [];
+  const ok = role === 'admin' || role === 'supervisor' || perms.includes('plant_inventory.read') || assignedPlants.length > 0;
+  if (!ok) {
+    return res.status(403).json({ success: false, message: 'Insufficient permissions to read plant inventory' });
+  }
+  next();
+};
+
+// Allow plant output read: admin, supervisor, plant_output.read, or assigned to plants
+const requirePlantOutputRead = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+  const role = (req.user.role || '').toLowerCase();
+  const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+  const assignedPlants = req.user.assignedPlants || [];
+  const ok = role === 'admin' || role === 'supervisor' || perms.includes('plant_output.read') || assignedPlants.length > 0;
+  if (!ok) {
+    return res.status(403).json({ success: false, message: 'Insufficient permissions to read plant output' });
+  }
+  next();
+};
+
 module.exports = {
   authenticateToken,
   requirePermission,
@@ -344,5 +374,7 @@ module.exports = {
   requireStepUpdateAccess,
   requireStepUpdateAccessFromBody,
   requireStepUpdateAccessFromReceipt,
-  requireStepUpdateAccessFromConsumption
+  requireStepUpdateAccessFromConsumption,
+  requirePlantInventoryRead,
+  requirePlantOutputRead
 };
