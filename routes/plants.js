@@ -189,6 +189,24 @@ router.post('/', authenticateToken, async (req, res) => {
     // Create and save the plant
     const plant = new Plant(req.body);
     await plant.save();
+
+    // Sync plant to each assigned manager's User.assignedPlants (so they can see it in the list)
+    const managerIds = (plant.assignedManagers || [])
+      .filter((a) => a.manager && a.isActive !== false)
+      .map((a) => (a.manager && a.manager._id ? a.manager._id : a.manager));
+    for (const managerId of managerIds) {
+      if (!managerId) continue;
+      const manager = await User.findById(managerId);
+      if (manager) {
+        const plantIdStr = plant._id.toString();
+        const hasPlant = (manager.assignedPlants || []).some((id) => (id && id.toString()) === plantIdStr);
+        if (!hasPlant) {
+          manager.assignedPlants = manager.assignedPlants || [];
+          manager.assignedPlants.push(plant._id);
+          await manager.save();
+        }
+      }
+    }
     
     // Populate assigned managers for response
     await plant.populate('assignedManagers.manager', 'firstName lastName email role');
@@ -246,11 +264,48 @@ router.put('/:id', authenticateToken, async (req, res) => {
         message: 'Access denied to this plant'
       });
     }
-    
+
+    const oldManagerIds = new Set(
+      (plant.assignedManagers || [])
+        .filter((a) => a.manager && a.isActive !== false)
+        .map((a) => (a.manager && a.manager._id ? a.manager._id : a.manager).toString())
+    );
+
     // Update plant fields
     Object.assign(plant, req.body);
     await plant.save();
-    
+
+    const newManagerIds = new Set(
+      (plant.assignedManagers || [])
+        .filter((a) => a.manager && a.isActive !== false)
+        .map((a) => (a.manager && a.manager._id ? a.manager._id : a.manager).toString())
+    );
+
+    const added = [...newManagerIds].filter((id) => !oldManagerIds.has(id));
+    const removed = [...oldManagerIds].filter((id) => !newManagerIds.has(id));
+
+    for (const managerId of added) {
+      const manager = await User.findById(managerId);
+      if (manager) {
+        const plantIdStr = plant._id.toString();
+        const hasPlant = (manager.assignedPlants || []).some((id) => (id && id.toString()) === plantIdStr);
+        if (!hasPlant) {
+          manager.assignedPlants = manager.assignedPlants || [];
+          manager.assignedPlants.push(plant._id);
+          await manager.save();
+        }
+      }
+    }
+    for (const managerId of removed) {
+      const manager = await User.findById(managerId);
+      if (manager) {
+        manager.assignedPlants = (manager.assignedPlants || []).filter(
+          (id) => id && id.toString() !== plant._id.toString()
+        );
+        await manager.save();
+      }
+    }
+
     // Populate assigned managers for response
     await plant.populate('assignedManagers.manager', 'firstName lastName email role');
     
