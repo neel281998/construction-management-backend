@@ -587,65 +587,74 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
     } else if (transfer.toPlant && transfer.toPlant._id) {
       // Handle plant transfer - update plant inventory
       const PlantInventory = require('../models/PlantInventory');
-      
-      // Check if plant already has this item
+      const plantId = transfer.toPlant._id;
+      const fromStorageSiteId = transfer.fromStorageSite && (transfer.fromStorageSite._id || transfer.fromStorageSite);
+
+      // Map storage-site category to PlantInventory category enum (Plant uses different enum; fallback to 'Other')
+      const plantCategoryEnum = ['Cement', 'Aggregates', 'Water', 'Admixtures', 'Steel Reinforcement', 'Concrete Mix', 'Tools & Equipment', 'Safety Equipment', 'Other'];
+      const categoryForPlant = plantCategoryEnum.includes(transfer.category) ? transfer.category : 'Other';
+
+      // Check if plant already has this item (PlantInventory uses itemName)
       let plantItem = await PlantInventory.findOne({
-        materialName: transfer.itemName,
-        plant: transfer.toPlant._id,
+        itemName: transfer.itemName,
+        plant: plantId,
         isActive: true
       });
-      
+
       if (plantItem) {
         // Update existing plant inventory item
         plantItem.currentStock += receivedQty;
-        
-        // Add to transfer history
+
+        // Add to transfer history (schema: fromStorageSite, toPlant, quantity, transferredBy, notes, transferId)
         plantItem.transferHistory = plantItem.transferHistory || [];
         plantItem.transferHistory.push({
-          fromStorageSite: transfer.fromStorageSite._id,
-          toPlant: transfer.toPlant._id,
+          fromStorageSite: fromStorageSiteId,
+          toPlant: plantId,
           quantity: receivedQty,
           transferredBy: req.user._id,
           notes: `Received from transfer: ${notes}`,
-          transferId: transfer._id,
-          status: 'received'
+          transferId: transfer._id
         });
-        
+
         await plantItem.save();
       } else {
-        // Create new plant inventory item
+        // Create new plant inventory item (itemName, category, materialType required; materialType = raw_material/finished_product/consumable)
         plantItem = new PlantInventory({
-          materialName: transfer.itemName,
-          materialType: transfer.category,
+          itemName: transfer.itemName,
+          category: categoryForPlant,
+          materialType: 'raw_material',
           unit: transfer.unit,
           currentStock: receivedQty,
           minimumStock: 0,
-          maximumStock: receivedQty * 2, // Set reasonable default
-          plant: transfer.toPlant._id,
-          supplier: null,
+          maximumStock: receivedQty * 2,
+          plant: plantId,
+          supplier: (transfer.supplier && transfer.supplier.name) ? { name: transfer.supplier.name } : undefined,
           lastRestocked: new Date(),
           transferHistory: [{
-            fromStorageSite: transfer.fromStorageSite._id,
-            toPlant: transfer.toPlant._id,
+            fromStorageSite: fromStorageSiteId,
+            toPlant: plantId,
             quantity: receivedQty,
             transferredBy: req.user._id,
             notes: `Received from transfer: ${notes}`,
-            transferId: transfer._id,
-            status: 'received'
+            transferId: transfer._id
           }],
           isActive: true
         });
-        
+
         await plantItem.save();
       }
     }
     
     // Update vehicle status back to available
-    const vehicle = await Vehicle.findById(transfer.vehicle._id);
-    if (vehicle) {
-      vehicle.status = 'available';
-      vehicle.tripTracking.currentTrip = null;
-      await vehicle.save();
+    const vehicleId = transfer.vehicle && (transfer.vehicle._id || transfer.vehicle);
+    let vehicle = null;
+    if (vehicleId) {
+      vehicle = await Vehicle.findById(vehicleId);
+      if (vehicle) {
+        vehicle.status = 'available';
+        if (vehicle.tripTracking) vehicle.tripTracking.currentTrip = null;
+        await vehicle.save();
+      }
     }
     
     // Send alerts if there's a discrepancy
@@ -685,26 +694,28 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
       console.error('Error creating completion alert:', alertError);
     }
 
-    // Create vehicle trip alert
+    // Create vehicle trip alert (only if vehicle was loaded)
     try {
-      await AlertService.createVehicleTripAlert({
-        vehicleId: vehicle._id,
-        vehicleNumber: vehicle.vehicleNumber,
-        dailyTrips: vehicle.tripTracking.dailyTrips,
-        totalTrips: vehicle.tripTracking.totalTrips,
-        tripDate: transfer.tripDate
-      }, {
+      if (vehicle) {
+        await AlertService.createVehicleTripAlert({
+          vehicleId: vehicle._id,
+          vehicleNumber: vehicle.vehicleNumber,
+          dailyTrips: (vehicle.tripTracking && vehicle.tripTracking.dailyTrips) || 0,
+          totalTrips: (vehicle.tripTracking && vehicle.tripTracking.totalTrips) || 0,
+          tripDate: transfer.tripDate
+        }, {
         transferId: transfer._id,
         itemName: transfer.itemName,
         quantity: receivedQty,
         fromStorageSite: transfer.fromStorageSite,
         toStorageSite: transfer.toStorageSite,
         receivedBy: receipt.receivedBy
-      });
+        });
+      }
     } catch (alertError) {
       console.error('Error creating vehicle trip alert:', alertError);
     }
-    
+
     res.json({
       success: true,
       message: 'Transfer received successfully',
@@ -734,9 +745,10 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
     
   } catch (error) {
     console.error('Receive transfer error:', error);
+    const message = error.message || 'Failed to receive transfer';
     res.status(500).json({
       success: false,
-      message: 'Failed to receive transfer'
+      message: process.env.NODE_ENV === 'development' ? message : 'Failed to receive transfer'
     });
   }
 });
