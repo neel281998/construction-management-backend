@@ -84,8 +84,8 @@ router.get('/vehicle-trips-from-to', authenticateToken, requirePermission('vehic
     }
 
     const [transfers, dispatches, vehicleTrips, plantOutputs] = await Promise.all([
-      InventoryTransfer.find(transferQuery).sort({ tripDate: -1, tripNumber: -1 }).limit(500),
-      InventoryDispatch.find(dispatchQuery).sort({ dispatchedAt: -1 }).limit(500),
+      InventoryTransfer.find(transferQuery).populate('receivedBy', 'firstName lastName').sort({ tripDate: -1, tripNumber: -1 }).limit(500),
+      InventoryDispatch.find(dispatchQuery).populate('receivedBy', 'firstName lastName').sort({ dispatchedAt: -1 }).limit(500),
       VehicleTrip.find(vehicleTripQuery).sort({ tripDate: -1 }).limit(500),
       PlantOutputDispatch.find(plantOutputQuery).populate('receivedBy', 'firstName lastName').sort({ dispatchedAt: -1 }).limit(500)
     ]);

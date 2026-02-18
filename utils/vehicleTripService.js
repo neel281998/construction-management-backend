@@ -36,6 +36,12 @@ async function createStorageInboundTrip(params) {
         lastName: user.lastName,
         email: user.email
       },
+      receivedBy: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email
+      },
       tripDate: new Date(),
       referenceId: referenceId || item._id,
       referenceType: referenceType || 'inventory'
@@ -75,6 +81,12 @@ async function createPlantInboundTrip(params) {
         driverPhone: vehicle.driverPhone
       },
       performedBy: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email
+      },
+      receivedBy: {
         _id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
