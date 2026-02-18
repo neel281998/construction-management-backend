@@ -4,8 +4,24 @@ const InventoryTransfer = require('../models/InventoryTransfer');
 const InventoryTransferReceipt = require('../models/InventoryTransferReceipt');
 const Vehicle = require('../models/Vehicle');
 const StorageSite = require('../models/StorageSite');
+const StepInventoryReceipt = require('../models/StepInventoryReceipt');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const AlertService = require('../utils/alertService');
+
+// Map storage-site/Inventory category to StepInventoryReceipt materialCategory enum
+const CATEGORY_TO_STEP_MATERIAL = {
+  'Cement': 'cement_concrete',
+  'Aggregates': 'aggregates',
+  'Water': 'cement_concrete',
+  'Admixtures': 'cement_concrete',
+  'Steel Reinforcement': 'steel_reinforcement',
+  'Concrete Mix': 'cement_concrete',
+  'Tools & Equipment': 'tools_equipment',
+  'Safety Equipment': 'tools_equipment',
+  'Building Materials': 'other',
+  'Other': 'other'
+};
+const STEP_RECEIPT_UNITS = ['m³', 'kg', 'liters', 'pieces', 'tons', 'sq.m', 'linear.m', 'bags', 'bundles'];
 
 const router = express.Router();
 
@@ -467,10 +483,9 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
       });
     }
     
-    // Check access control for destination (storage site or plant)
+    // Check access control for destination (storage site, plant, or construction site/step)
     if (req.user.role !== 'admin') {
       if (transfer.toStorageSite && transfer.toStorageSite._id) {
-        // Check storage site access
         if (!req.user.assignedStorageSites.includes(transfer.toStorageSite._id)) {
           return res.status(403).json({
             success: false,
@@ -478,11 +493,28 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
           });
         }
       } else if (transfer.toPlant && transfer.toPlant._id) {
-        // Check plant access
         if (!req.user.assignedPlants || !req.user.assignedPlants.includes(transfer.toPlant._id)) {
           return res.status(403).json({
             success: false,
             message: 'Access denied to destination plant'
+          });
+        }
+      } else if (transfer.toConstructionStep && transfer.toConstructionStep._id) {
+        const siteId = transfer.toConstructionStep.siteId && (transfer.toConstructionStep.siteId._id || transfer.toConstructionStep.siteId);
+        const assignedSites = (req.user.assignedSites || []).map(s => (s && s._id ? s._id : s));
+        if (!siteId || !assignedSites.length || !assignedSites.some(s => s.toString() === siteId.toString())) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied to destination construction step'
+          });
+        }
+      } else if (transfer.toConstructionSite && transfer.toConstructionSite._id) {
+        const siteId = transfer.toConstructionSite._id;
+        const assignedSites = (req.user.assignedSites || []).map(s => (s && s._id ? s._id : s));
+        if (!assignedSites.length || !assignedSites.some(s => s.toString() === siteId.toString())) {
+          return res.status(403).json({
+            success: false,
+            message: 'Access denied to destination construction site'
           });
         }
       }
@@ -642,6 +674,61 @@ router.post('/receive', authenticateToken, requirePermission('inventory.update')
         });
 
         await plantItem.save();
+      }
+    } else if (transfer.toConstructionStep && transfer.toConstructionStep._id) {
+      // Create step inventory receipt so it appears in Step Details → View Receipts
+      try {
+        const stepId = transfer.toConstructionStep._id;
+        let resolvedSiteId = transfer.toConstructionStep.siteId && (transfer.toConstructionStep.siteId._id || transfer.toConstructionStep.siteId);
+        if (!resolvedSiteId) {
+          const Step = require('../models/Step');
+          const step = await Step.findById(stepId).select('siteId').lean();
+          resolvedSiteId = step && step.siteId;
+        }
+        if (!resolvedSiteId) {
+          console.warn('Receive transfer: could not resolve siteId for step', stepId);
+        } else {
+          const materialCategory = CATEGORY_TO_STEP_MATERIAL[transfer.category] || 'other';
+          const unit = STEP_RECEIPT_UNITS.includes(transfer.unit) ? transfer.unit : 'kg';
+          const fromStorageSite = transfer.fromStorageSite && (transfer.fromStorageSite._id || transfer.fromStorageSite);
+          const stepReceipt = new StepInventoryReceipt({
+            stepId,
+            siteId: resolvedSiteId,
+            sourceType: 'storage_site',
+            sourceId: fromStorageSite,
+            sourceName: (transfer.fromStorageSite && transfer.fromStorageSite.name) || 'Storage',
+            materialName: transfer.itemName,
+            materialCategory,
+            materialType: 'primary',
+            quantity: receivedQty,
+            unit,
+            deliveryDate: new Date(),
+            deliveryImages: Array.isArray(receiptImages) ? receiptImages : [],
+            deliveryNotes: notes || `Received from transfer (ID: ${transfer._id})`,
+            receivedBy: {
+              _id: req.user._id,
+              firstName: req.user.firstName,
+              lastName: req.user.lastName,
+              email: req.user.email
+            },
+            receivedAt: new Date(),
+            verifiedBy: req.user._id,
+            verificationDate: new Date(),
+            verificationNotes: `Received from storage: ${(transfer.fromStorageSite && transfer.fromStorageSite.name) || 'Storage'}`,
+            status: 'received',
+            vehicle: transfer.vehicle && transfer.vehicle._id ? {
+              _id: transfer.vehicle._id,
+              vehicleNumber: transfer.vehicle.vehicleNumber,
+              vehicleType: transfer.vehicle.vehicleType,
+              driverName: transfer.vehicle.driverName,
+              driverPhone: transfer.vehicle.driverPhone
+            } : undefined
+          });
+          await stepReceipt.save();
+        }
+      } catch (stepReceiptError) {
+        console.error('Error creating step inventory receipt for transfer:', stepReceiptError);
+        // Don't fail the receive if step receipt creation fails
       }
     }
     
