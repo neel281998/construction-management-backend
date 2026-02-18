@@ -84,6 +84,52 @@ router.get('/history', authenticateToken, requirePermission('inventory.read'), a
   }
 });
 
+// Get pending transfers for a construction step (must be before /:transferId so path is not matched as transferId)
+router.get('/pending-construction-step/:stepId', authenticateToken, requirePermission('site.read'), async (req, res) => {
+  try {
+    const { stepId } = req.params;
+    const Step = require('../models/Step');
+    const step = await Step.findById(stepId).select('siteId').lean();
+    if (!step || !step.siteId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Construction step not found'
+      });
+    }
+    const siteId = step.siteId.toString();
+    if (req.user.role !== 'admin') {
+      const assignedSites = (req.user.assignedSites || []).map(s => (s && s._id ? s._id : s).toString());
+      if (!assignedSites.length || !assignedSites.includes(siteId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to this construction step'
+        });
+      }
+    }
+    const transfers = await InventoryTransfer.find({
+      'toConstructionStep._id': stepId,
+      status: 'in_transit'
+    })
+      .sort({ transferredAt: -1 })
+      .populate('transferredBy', 'firstName lastName email')
+      .lean();
+    res.json({
+      success: true,
+      data: {
+        stepId,
+        siteId,
+        transfers
+      }
+    });
+  } catch (error) {
+    console.error('Get pending transfers for step error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pending transfers for step'
+    });
+  }
+});
+
 // Get specific transfer by ID (must be before other routes to avoid conflicts)
 router.get('/:transferId', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
   try {
@@ -100,20 +146,24 @@ router.get('/:transferId', authenticateToken, requirePermission('inventory.read'
       });
     }
     
-    // Check access control
+    // Check access control (storage sites or construction site/step)
     if (req.user.role !== 'admin') {
-      const assignedSites = req.user.assignedStorageSites || [];
-      const hasAccess = assignedSites.includes(transfer.fromStorageSite._id) || 
-                       assignedSites.includes(transfer.toStorageSite._id);
-      
-      if (!hasAccess) {
+      const storageSiteIds = req.user.assignedStorageSites || [];
+      const constructionSiteIds = (req.user.assignedSites || []).map(s => (s && s._id ? s._id : s).toString());
+      const fromId = (transfer.fromStorageSite && (transfer.fromStorageSite._id || transfer.fromStorageSite))?.toString();
+      const toStorageId = (transfer.toStorageSite && transfer.toStorageSite._id)?.toString();
+      const toStepSiteId = (transfer.toConstructionStep && transfer.toConstructionStep.siteId && (transfer.toConstructionStep.siteId._id || transfer.toConstructionStep.siteId))?.toString();
+      const toSiteId = (transfer.toConstructionSite && transfer.toConstructionSite._id)?.toString();
+      const hasStorageAccess = (fromId && storageSiteIds.includes(fromId)) || (toStorageId && storageSiteIds.includes(toStorageId));
+      const hasConstructionAccess = (toStepSiteId && constructionSiteIds.includes(toStepSiteId)) || (toSiteId && constructionSiteIds.includes(toSiteId));
+      if (!hasStorageAccess && !hasConstructionAccess) {
         return res.status(403).json({
           success: false,
           message: 'Access denied to this transfer'
         });
       }
     }
-    
+
     res.json({
       success: true,
       data: {
