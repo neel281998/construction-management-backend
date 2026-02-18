@@ -31,8 +31,8 @@ router.get('/', authenticateToken, async (req, res) => {
     // Build query
     let query = {};
     
-    // When loading destinations for inventory transfer, show all plants (user must have inventory.update)
-    const forTransfer = allForTransfer === 'true' && (role === 'admin' || req.user.permissions?.includes('inventory.update'));
+    // When loading destinations for inventory transfer, show all plants (admin, supervisor, or inventory.update)
+    const forTransfer = allForTransfer === 'true' && (role === 'admin' || role === 'supervisor' || (req.user.permissions && req.user.permissions.includes('inventory.update')));
     
     // Admin sees all plants; supervisor and others see only assigned plants (unless forTransfer)
     if (!forTransfer && role !== 'admin') {

@@ -27,9 +27,9 @@ router.get('/', authenticateToken, requirePermission('site.read'), cacheMiddlewa
     // Build query
     let query = { isActive: true };
     
-    // When loading destinations for inventory transfer, show all construction sites (user must have inventory.update)
+    // When loading destinations for inventory transfer, show all construction sites (admin, supervisor, or inventory.update)
     const role = (req.user.role || '').toLowerCase();
-    const forTransfer = req.query.allForTransfer === 'true' && (role === 'admin' || req.user.permissions?.includes('inventory.update'));
+    const forTransfer = req.query.allForTransfer === 'true' && (role === 'admin' || role === 'supervisor' || (req.user.permissions && req.user.permissions.includes('inventory.update')));
     
     // Role-based filtering: admin sees all; supervisor sees assigned sites only; others filtered by siteManager/assignedStaff/assignedSites (unless forTransfer)
     if (!forTransfer) {

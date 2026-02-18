@@ -20,9 +20,9 @@ router.get('/', authenticateToken, requirePermission('storage_site.read'), async
     // Build query based on user role
     let query = {};
     
-    // When loading destinations for inventory transfer, show all storage sites (user must have inventory.update)
+    // When loading destinations for inventory transfer, show all storage sites (admin, supervisor, or inventory.update)
     const role = (req.user.role || '').toLowerCase();
-    const forTransfer = allForTransfer === 'true' && (role === 'admin' || req.user.permissions?.includes('inventory.update'));
+    const forTransfer = allForTransfer === 'true' && (role === 'admin' || role === 'supervisor' || (req.user.permissions && req.user.permissions.includes('inventory.update')));
     
     // Admin sees all; supervisor and others see only assigned storage sites (unless forTransfer)
     if (!forTransfer && role !== 'admin') {
