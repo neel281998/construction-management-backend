@@ -784,6 +784,32 @@ router.get('/destination/:destinationType/:destinationId', authenticateToken, re
   }
 });
 
+// Get single dispatch by ID (for confirm receipt screen)
+router.get('/single/:dispatchId', authenticateToken, requirePlantOutputRead, async (req, res) => {
+  try {
+    const dispatch = await PlantOutputDispatch.findById(req.params.dispatchId)
+      .populate('dispatchedBy', 'firstName lastName email')
+      .populate('fromPlant', 'name plantType')
+      .lean();
+    if (!dispatch) {
+      return res.status(404).json({
+        success: false,
+        message: 'Dispatch not found'
+      });
+    }
+    res.json({
+      success: true,
+      data: { dispatch }
+    });
+  } catch (error) {
+    console.error('Get plant output dispatch error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dispatch'
+    });
+  }
+});
+
 // Get receipt history for a dispatch
 router.get('/:dispatchId/receipts', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
