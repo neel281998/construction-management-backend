@@ -14,7 +14,7 @@ const alertSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['info', 'warning', 'error', 'success', 'maintenance', 'low_stock', 'vehicle_issue', 'site_issue', 'system']
+    enum: ['info', 'warning', 'error', 'success', 'maintenance', 'low_stock', 'vehicle_issue', 'site_issue', 'system', 'transfer_completed', 'vehicle_trip_completed']
   },
   priority: {
     type: String,

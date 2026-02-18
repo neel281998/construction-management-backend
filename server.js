@@ -91,13 +91,15 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Rate limiting
+// Rate limiting (configurable via RATE_LIMIT_MAX; default 400/15min for mobile app usage)
+const rateLimitMax = parseInt(process.env.RATE_LIMIT_MAX || '400', 10);
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: rateLimitMax,
+  message: { success: false, message: 'Too many requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
-  trustProxy: true // Trust proxy for accurate IP detection behind Nginx
+  trustProxy: true
 });
 app.use(limiter);
 
