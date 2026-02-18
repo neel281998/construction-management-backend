@@ -27,29 +27,33 @@ router.get('/', authenticateToken, requirePermission('site.read'), cacheMiddlewa
     // Build query
     let query = { isActive: true };
     
-    // Role-based filtering: admin sees all; supervisor sees assigned sites only; others filtered by siteManager/assignedStaff/assignedSites
+    // When loading destinations for inventory transfer, show all construction sites (user must have inventory.update)
     const role = (req.user.role || '').toLowerCase();
-    if (role === 'admin') {
-      // Admin sees all sites
-    } else if (role === 'supervisor') {
-      // Supervisor sees only assigned sites (or sites where they are siteManager/assignedStaff)
-      const filterConditions = [
-        { siteManager: req.user._id },
-        { 'assignedStaff.user': req.user._id }
-      ];
-      if (req.user.assignedSites?.length) {
-        filterConditions.push({ _id: { $in: req.user.assignedSites } });
+    const forTransfer = req.query.allForTransfer === 'true' && (role === 'admin' || req.user.permissions?.includes('inventory.update'));
+    
+    // Role-based filtering: admin sees all; supervisor sees assigned sites only; others filtered by siteManager/assignedStaff/assignedSites (unless forTransfer)
+    if (!forTransfer) {
+      if (role === 'admin') {
+        // Admin sees all sites
+      } else if (role === 'supervisor') {
+        const filterConditions = [
+          { siteManager: req.user._id },
+          { 'assignedStaff.user': req.user._id }
+        ];
+        if (req.user.assignedSites?.length) {
+          filterConditions.push({ _id: { $in: req.user.assignedSites } });
+        }
+        query.$or = filterConditions;
+      } else {
+        const filterConditions = [
+          { siteManager: req.user._id },
+          { 'assignedStaff.user': req.user._id }
+        ];
+        if (req.user.assignedSites?.length) {
+          filterConditions.push({ _id: { $in: req.user.assignedSites } });
+        }
+        query.$or = filterConditions;
       }
-      query.$or = filterConditions;
-    } else {
-      const filterConditions = [
-        { siteManager: req.user._id },
-        { 'assignedStaff.user': req.user._id }
-      ];
-      if (req.user.assignedSites?.length) {
-        filterConditions.push({ _id: { $in: req.user.assignedSites } });
-      }
-      query.$or = filterConditions;
     }
     
     // Apply filters

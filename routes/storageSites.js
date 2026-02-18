@@ -13,15 +13,19 @@ router.get('/', authenticateToken, requirePermission('storage_site.read'), async
       page = 1,
       limit = 10,
       search,
-      isActive = 'true'
+      isActive = 'true',
+      allForTransfer
     } = req.query;
     
     // Build query based on user role
     let query = {};
     
-    // Admin sees all; supervisor and others see only assigned storage sites
+    // When loading destinations for inventory transfer, show all storage sites (user must have inventory.update)
     const role = (req.user.role || '').toLowerCase();
-    if (role !== 'admin') {
+    const forTransfer = allForTransfer === 'true' && (role === 'admin' || req.user.permissions?.includes('inventory.update'));
+    
+    // Admin sees all; supervisor and others see only assigned storage sites (unless forTransfer)
+    if (!forTransfer && role !== 'admin') {
       const assigned = req.user.assignedStorageSites || [];
       query._id = assigned.length ? { $in: assigned } : { $in: [] }; // Empty = no results
     }

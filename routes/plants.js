@@ -24,14 +24,18 @@ router.get('/', authenticateToken, async (req, res) => {
       limit = 10,
       plantType,
       search,
-      isActive
+      isActive,
+      allForTransfer
     } = req.query;
     
     // Build query
     let query = {};
     
-    // Admin sees all plants; supervisor and others see only assigned plants
-    if (role !== 'admin') {
+    // When loading destinations for inventory transfer, show all plants (user must have inventory.update)
+    const forTransfer = allForTransfer === 'true' && (role === 'admin' || req.user.permissions?.includes('inventory.update'));
+    
+    // Admin sees all plants; supervisor and others see only assigned plants (unless forTransfer)
+    if (!forTransfer && role !== 'admin') {
       const assignedPlants = req.user.assignedPlants || [];
       if (assignedPlants.length === 0) {
         return res.json({
