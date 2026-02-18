@@ -9,7 +9,7 @@ const VehicleRefueling = require('../models/VehicleRefueling');
 const Vehicle = require('../models/Vehicle');
 const User = require('../models/User');
 const FuelAccessConfig = require('../models/FuelAccessConfig');
-const { requirePermission, requireAdmin, requireFuelAccess } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requireAdmin, requireFuelAccess } = require('../middleware/auth');
 const { logActivity, getActivityStyle } = require('../utils/activityLogger');
 
 // ---------- Fuel access control (no requireFuelAccess here so frontend can check access) ----------
