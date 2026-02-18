@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const FuelLog = require('../models/FuelLog');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requireFuelAccess } = require('../middleware/auth');
+
+router.use(authenticateToken, requireFuelAccess);
 
 // Get all fuel logs
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { 
       vehicleId, 
@@ -60,7 +62,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get single fuel log
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const log = await FuelLog.findById(req.params.id)
       .populate('vehicleId', 'vehicleNumber make model')
@@ -90,7 +92,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create new fuel log (manual entry)
-router.post('/', authenticateToken, requirePermission('fuel.log'), async (req, res) => {
+router.post('/', requirePermission('fuel.log'), async (req, res) => {
   try {
     const {
       vehicleId,
@@ -152,7 +154,7 @@ router.post('/', authenticateToken, requirePermission('fuel.log'), async (req, r
 });
 
 // Update fuel log
-router.put('/:id', authenticateToken, requirePermission('fuel.update'), async (req, res) => {
+router.put('/:id', requirePermission('fuel.update'), async (req, res) => {
   try {
     const log = await FuelLog.findByIdAndUpdate(
       req.params.id,
@@ -188,7 +190,7 @@ router.put('/:id', authenticateToken, requirePermission('fuel.update'), async (r
 });
 
 // Delete fuel log
-router.delete('/:id', authenticateToken, requirePermission('fuel.delete'), async (req, res) => {
+router.delete('/:id', requirePermission('fuel.delete'), async (req, res) => {
   try {
     const log = await FuelLog.findByIdAndDelete(req.params.id);
     
@@ -214,7 +216,7 @@ router.delete('/:id', authenticateToken, requirePermission('fuel.delete'), async
 });
 
 // Get fuel consumption report
-router.get('/reports/consumption', authenticateToken, async (req, res) => {
+router.get('/reports/consumption', async (req, res) => {
   try {
     const { 
       vehicleId, 
@@ -300,7 +302,7 @@ router.get('/reports/consumption', authenticateToken, async (req, res) => {
 });
 
 // Get fuel efficiency report
-router.get('/reports/efficiency', authenticateToken, async (req, res) => {
+router.get('/reports/efficiency', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 
@@ -366,7 +368,7 @@ router.get('/reports/efficiency', authenticateToken, async (req, res) => {
 });
 
 // Refuel vehicle from sub storage (Admin, Fuel Sub Manager)
-router.post('/refuel-vehicle', authenticateToken, async (req, res) => {
+router.post('/refuel-vehicle', async (req, res) => {
   // Check if user has fuel management role
   if (!['admin', 'fuel_sub_manager'].includes(req.user.role)) {
     return res.status(403).json({
@@ -462,7 +464,7 @@ router.post('/refuel-vehicle', authenticateToken, async (req, res) => {
 });
 
 // Get fuel consumption report for vehicles
-router.get('/consumption-report', authenticateToken, async (req, res) => {
+router.get('/consumption-report', async (req, res) => {
   try {
     const { 
       vehicleId, 

@@ -1,10 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const FuelStorage = require('../models/FuelStorage');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requireFuelAccess } = require('../middleware/auth');
+
+router.use(authenticateToken, requireFuelAccess);
 
 // Get all fuel storages
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { siteId, fuelType, storageType, status, parentStorageId } = req.query;
     
@@ -38,7 +40,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get single fuel storage
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const storage = await FuelStorage.findById(req.params.id)
       .populate('siteId', 'name address')
@@ -67,7 +69,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create new fuel storage (Admin, Fuel Main Manager, Fuel Sub Manager)
-router.post('/', authenticateToken, async (req, res) => {
+router.post('/', async (req, res) => {
   // Check if user has fuel management role
   if (!['admin', 'fuel_main_manager', 'fuel_sub_manager'].includes(req.user.role)) {
     return res.status(403).json({
@@ -117,7 +119,7 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 // Update fuel storage (Admin, Fuel Main Manager, Fuel Sub Manager)
-router.put('/:id', authenticateToken, async (req, res) => {
+router.put('/:id', async (req, res) => {
   // Check if user has fuel management role
   if (!['admin', 'fuel_main_manager', 'fuel_sub_manager'].includes(req.user.role)) {
     return res.status(403).json({
@@ -165,7 +167,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
 // Update fuel reading (restock)
 // Restock fuel storage (Admin, Fuel Main Manager, Fuel Sub Manager)
-router.post('/:id/restock', authenticateToken, async (req, res) => {
+router.post('/:id/restock', async (req, res) => {
   // Check if user has fuel management role
   if (!['admin', 'fuel_main_manager', 'fuel_sub_manager'].includes(req.user.role)) {
     return res.status(403).json({
@@ -242,7 +244,7 @@ router.post('/:id/restock', authenticateToken, async (req, res) => {
 });
 
 // Delete fuel storage (Admin only)
-router.delete('/:id', authenticateToken, async (req, res) => {
+router.delete('/:id', async (req, res) => {
   // Check if user is admin
   if (req.user.role !== 'admin') {
     return res.status(403).json({
@@ -275,7 +277,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 });
 
 // Get fuel storage statistics
-router.get('/:id/stats', authenticateToken, async (req, res) => {
+router.get('/:id/stats', async (req, res) => {
   try {
     const storage = await FuelStorage.findById(req.params.id);
     if (!storage) {
@@ -322,7 +324,7 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
 });
 
 // Get main storage (only one should exist)
-router.get('/main/storage', authenticateToken, async (req, res) => {
+router.get('/main/storage', async (req, res) => {
   try {
     const mainStorage = await FuelStorage.findOne({ storageType: 'main' })
       .populate('manager', 'firstName lastName email role')
@@ -351,7 +353,7 @@ router.get('/main/storage', authenticateToken, async (req, res) => {
 });
 
 // Get all sub storages (assigned to managers)
-router.get('/sub-storages', authenticateToken, async (req, res) => {
+router.get('/sub-storages', async (req, res) => {
   try {
     const subStorages = await FuelStorage.find({ 
       storageType: 'sub'
@@ -376,7 +378,7 @@ router.get('/sub-storages', authenticateToken, async (req, res) => {
 });
 
 // Update daily reading
-router.post('/:id/daily-reading', authenticateToken, async (req, res) => {
+router.post('/:id/daily-reading', async (req, res) => {
   try {
     const { id } = req.params;
     const { reading, notes } = req.body;
@@ -429,7 +431,7 @@ router.post('/:id/daily-reading', authenticateToken, async (req, res) => {
 });
 
 // Transfer fuel from main to sub storage
-router.post('/transfer/main-to-sub', authenticateToken, requirePermission('fuel_management'), async (req, res) => {
+router.post('/transfer/main-to-sub', requirePermission('fuel_management'), async (req, res) => {
   try {
     const { subStorageId, amount, notes } = req.body;
     const userId = req.user.id;

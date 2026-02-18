@@ -7,13 +7,68 @@ const FuelRestock = require('../models/FuelRestock');
 const DailyReading = require('../models/DailyReading');
 const VehicleRefueling = require('../models/VehicleRefueling');
 const Vehicle = require('../models/Vehicle');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const User = require('../models/User');
+const FuelAccessConfig = require('../models/FuelAccessConfig');
+const { requirePermission, requireAdmin, requireFuelAccess } = require('../middleware/auth');
 const { logActivity, getActivityStyle } = require('../utils/activityLogger');
+
+// ---------- Fuel access control (no requireFuelAccess here so frontend can check access) ----------
+// Check if current user can access fuel management (admin or in allowed list)
+router.get('/check-access', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role === 'admin') {
+      return res.json({ success: true, data: { canAccess: true } });
+    }
+    const config = await FuelAccessConfig.getConfig();
+    const allowed = (config.allowedUserIds || []).map(id => id.toString());
+    const canAccess = allowed.includes(req.user._id.toString());
+    res.json({ success: true, data: { canAccess } });
+  } catch (err) {
+    console.error('Fuel check-access error:', err);
+    res.status(500).json({ success: false, message: 'Failed to check fuel access' });
+  }
+});
+
+// Get allowed managers (admin only) – for admin to see/edit who has fuel access
+router.get('/allowed-managers', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const config = await FuelAccessConfig.getConfig();
+    const list = config.allowedUserIds || [];
+    const ids = list.map(id => (id && id.toString ? id.toString() : id));
+    const users = list.length
+      ? await User.find({ _id: { $in: list } }).select('_id firstName lastName email role').lean()
+      : [];
+    res.json({ success: true, data: { allowedUserIds: ids, users } });
+  } catch (err) {
+    console.error('Fuel allowed-managers get error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch allowed managers' });
+  }
+});
+
+// Set allowed managers (admin only) – admin selects multiple supervisors/users who can access fuel
+router.put('/allowed-managers', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userIds } = req.body || {};
+    const ids = Array.isArray(userIds) ? userIds.filter(Boolean) : [];
+    const config = await FuelAccessConfig.getConfig();
+    config.allowedUserIds = ids.map(id => (typeof id === 'string' ? id : id.toString()));
+    config.updatedBy = req.user._id;
+    config.updatedAt = new Date();
+    await config.save();
+    res.json({ success: true, data: { allowedUserIds: config.allowedUserIds }, message: 'Fuel access updated' });
+  } catch (err) {
+    console.error('Fuel allowed-managers put error:', err);
+    res.status(500).json({ success: false, message: 'Failed to update allowed managers' });
+  }
+});
+
+// All routes below require fuel access (admin or selected supervisor)
+router.use(authenticateToken, requireFuelAccess);
 
 // ==================== MAIN STORAGE ROUTES ====================
 
 // Get all main storage
-router.get('/main-storage', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/main-storage', requirePermission('fuel.read'), async (req, res) => {
   try {
     const mainStorages = await MainStorage.find({ isActive: true })
       .populate('manager', 'firstName lastName email')
@@ -33,7 +88,7 @@ router.get('/main-storage', authenticateToken, requirePermission('fuel.read'), a
 });
 
 // Get single main storage
-router.get('/main-storage/:id', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/main-storage/:id', requirePermission('fuel.read'), async (req, res) => {
   try {
     const mainStorage = await MainStorage.findById(req.params.id)
       .populate('manager', 'firstName lastName email');
@@ -59,7 +114,7 @@ router.get('/main-storage/:id', authenticateToken, requirePermission('fuel.read'
 });
 
 // Create main storage
-router.post('/main-storage', authenticateToken, requirePermission('fuel.create'), async (req, res) => {
+router.post('/main-storage', requirePermission('fuel.create'), async (req, res) => {
   try {
     const { initialPumpReading, initialPumpReadingImage, ...restBody } = req.body;
     
@@ -133,7 +188,7 @@ router.post('/main-storage', authenticateToken, requirePermission('fuel.create')
 });
 
 // Update main storage
-router.put('/main-storage/:id', authenticateToken, requirePermission('fuel.update'), async (req, res) => {
+router.put('/main-storage/:id', requirePermission('fuel.update'), async (req, res) => {
   try {
     const mainStorage = await MainStorage.findByIdAndUpdate(
       req.params.id,
@@ -177,7 +232,7 @@ router.put('/main-storage/:id', authenticateToken, requirePermission('fuel.updat
 });
 
 // Delete main storage (soft delete)
-router.delete('/main-storage/:id', authenticateToken, requirePermission('fuel.delete'), async (req, res) => {
+router.delete('/main-storage/:id', requirePermission('fuel.delete'), async (req, res) => {
   try {
     const mainStorage = await MainStorage.findById(req.params.id);
     
@@ -220,7 +275,7 @@ router.delete('/main-storage/:id', authenticateToken, requirePermission('fuel.de
 });
 
 // Restock main storage
-router.post('/main-storage/:id/restock', authenticateToken, requirePermission('fuel.restock'), async (req, res) => {
+router.post('/main-storage/:id/restock', requirePermission('fuel.restock'), async (req, res) => {
   try {
     const { quantity, scaleReading, image, source, notes } = req.body;
     
@@ -297,7 +352,7 @@ router.post('/main-storage/:id/restock', authenticateToken, requirePermission('f
 });
 
 // Record daily reading for main storage
-router.post('/main-storage/:id/daily-reading', authenticateToken, requirePermission('fuel.reading'), async (req, res) => {
+router.post('/main-storage/:id/daily-reading', requirePermission('fuel.reading'), async (req, res) => {
   try {
     const { readingType, value, image, notes } = req.body; // readingType: 'opening' or 'closing'
     
@@ -380,7 +435,7 @@ router.post('/main-storage/:id/daily-reading', authenticateToken, requirePermiss
 // ==================== SUB PUMP ROUTES ====================
 
 // Get all sub pumps
-router.get('/sub-pumps', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/sub-pumps', requirePermission('fuel.read'), async (req, res) => {
   try {
     const subPumps = await SubPump.find({ isActive: true })
       .populate('manager', 'firstName lastName email')
@@ -400,7 +455,7 @@ router.get('/sub-pumps', authenticateToken, requirePermission('fuel.read'), asyn
 });
 
 // Get single sub pump
-router.get('/sub-pumps/:id', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/sub-pumps/:id', requirePermission('fuel.read'), async (req, res) => {
   try {
     const subPump = await SubPump.findById(req.params.id)
       .populate('manager', 'firstName lastName email');
@@ -426,7 +481,7 @@ router.get('/sub-pumps/:id', authenticateToken, requirePermission('fuel.read'), 
 });
 
 // Create sub pump
-router.post('/sub-pumps', authenticateToken, requirePermission('fuel.create'), async (req, res) => {
+router.post('/sub-pumps', requirePermission('fuel.create'), async (req, res) => {
   try {
     const { initialPumpReading, initialPumpReadingImage, ...restBody } = req.body;
     
@@ -499,7 +554,7 @@ router.post('/sub-pumps', authenticateToken, requirePermission('fuel.create'), a
 });
 
 // Update sub pump
-router.put('/sub-pumps/:id', authenticateToken, requirePermission('fuel.update'), async (req, res) => {
+router.put('/sub-pumps/:id', requirePermission('fuel.update'), async (req, res) => {
   try {
     const subPump = await SubPump.findByIdAndUpdate(
       req.params.id,
@@ -543,7 +598,7 @@ router.put('/sub-pumps/:id', authenticateToken, requirePermission('fuel.update')
 });
 
 // Delete sub pump (soft delete)
-router.delete('/sub-pumps/:id', authenticateToken, requirePermission('fuel.delete'), async (req, res) => {
+router.delete('/sub-pumps/:id', requirePermission('fuel.delete'), async (req, res) => {
   try {
     const subPump = await SubPump.findById(req.params.id);
     
@@ -586,7 +641,7 @@ router.delete('/sub-pumps/:id', authenticateToken, requirePermission('fuel.delet
 });
 
 // Restock sub pump
-router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel.restock'), async (req, res) => {
+router.post('/sub-pumps/:id/restock', requirePermission('fuel.restock'), async (req, res) => {
   try {
     const { quantity, scaleReading, image, source, notes } = req.body;
     
@@ -695,7 +750,7 @@ router.post('/sub-pumps/:id/restock', authenticateToken, requirePermission('fuel
 });
 
 // Record daily reading for sub pump
-router.post('/sub-pumps/:id/daily-reading', authenticateToken, requirePermission('fuel.reading'), async (req, res) => {
+router.post('/sub-pumps/:id/daily-reading', requirePermission('fuel.reading'), async (req, res) => {
   try {
     const { readingType, value, image, notes } = req.body;
     
@@ -776,7 +831,7 @@ router.post('/sub-pumps/:id/daily-reading', authenticateToken, requirePermission
 // ==================== VEHICLE REFUELING ROUTES ====================
 
 // Record vehicle refueling
-router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), async (req, res) => {
+router.post('/refuel', requirePermission('fuel.refuel'), async (req, res) => {
   try {
     const {
       vehicleId,
@@ -957,7 +1012,7 @@ router.post('/refuel', authenticateToken, requirePermission('fuel.refuel'), asyn
 });
 
 // Get all refueling history (general)
-router.get('/refuel-history', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/refuel-history', requirePermission('fuel.read'), async (req, res) => {
   try {
     const { page = 1, limit = 20, vehicleId, startDate, endDate } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -1004,7 +1059,7 @@ router.get('/refuel-history', authenticateToken, requirePermission('fuel.read'),
 });
 
 // Get fuel restock history (for main storage and sub pumps)
-router.get('/restock-history', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/restock-history', requirePermission('fuel.read'), async (req, res) => {
   try {
     const { page = 1, limit = 20, storageType, storageId, startDate, endDate } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -1051,7 +1106,7 @@ router.get('/restock-history', authenticateToken, requirePermission('fuel.read')
 });
 
 // Get vehicle refueling history
-router.get('/refuel-history/:vehicleId', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/refuel-history/:vehicleId', requirePermission('fuel.read'), async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -1087,7 +1142,7 @@ router.get('/refuel-history/:vehicleId', authenticateToken, requirePermission('f
 });
 
 // Get vehicle fuel efficiency
-router.get('/efficiency/:vehicleId', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/efficiency/:vehicleId', requirePermission('fuel.read'), async (req, res) => {
   try {
     const vehicle = await Vehicle.findById(req.params.vehicleId);
     if (!vehicle) {
@@ -1121,7 +1176,7 @@ router.get('/efficiency/:vehicleId', authenticateToken, requirePermission('fuel.
 // ==================== DASHBOARD & REPORTS ====================
 
 // Get fuel management dashboard data
-router.get('/dashboard', authenticateToken, requirePermission('fuel.read'), async (req, res) => {
+router.get('/dashboard', requirePermission('fuel.read'), async (req, res) => {
   try {
     // Get main storage summary
     const mainStorages = await MainStorage.find({ isActive: true });

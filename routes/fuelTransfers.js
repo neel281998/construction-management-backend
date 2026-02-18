@@ -2,10 +2,12 @@ const express = require('express');
 const router = express.Router();
 const FuelTransfer = require('../models/FuelTransfer');
 const FuelStorage = require('../models/FuelStorage');
-const { authenticateToken, requirePermission } = require('../middleware/auth');
+const { authenticateToken, requirePermission, requireFuelAccess } = require('../middleware/auth');
+
+router.use(authenticateToken, requireFuelAccess);
 
 // Get all fuel transfers
-router.get('/', authenticateToken, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { 
       fromStorageId, 
@@ -66,7 +68,7 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // Get single fuel transfer
-router.get('/:id', authenticateToken, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const transfer = await FuelTransfer.findById(req.params.id)
       .populate('fromStorageId', 'name location fuelType')
@@ -97,7 +99,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create new fuel transfer
-router.post('/', authenticateToken, requirePermission('fuel.transfer'), async (req, res) => {
+router.post('/', requirePermission('fuel.transfer'), async (req, res) => {
   try {
     const {
       fromStorageId,
@@ -224,7 +226,7 @@ router.post('/', authenticateToken, requirePermission('fuel.transfer'), async (r
 });
 
 // Execute fuel transfer
-router.post('/:id/execute', authenticateToken, requirePermission('fuel.transfer'), async (req, res) => {
+router.post('/:id/execute', requirePermission('fuel.transfer'), async (req, res) => {
   try {
     const transfer = await FuelTransfer.findById(req.params.id);
     if (!transfer) {
@@ -303,7 +305,7 @@ router.post('/:id/execute', authenticateToken, requirePermission('fuel.transfer'
 });
 
 // Cancel fuel transfer
-router.post('/:id/cancel', authenticateToken, requirePermission('fuel.transfer'), async (req, res) => {
+router.post('/:id/cancel', requirePermission('fuel.transfer'), async (req, res) => {
   try {
     const transfer = await FuelTransfer.findByIdAndUpdate(
       req.params.id,
@@ -337,7 +339,7 @@ router.post('/:id/cancel', authenticateToken, requirePermission('fuel.transfer')
 });
 
 // Get transfer statistics
-router.get('/stats/overview', authenticateToken, async (req, res) => {
+router.get('/stats/overview', async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     

@@ -363,6 +363,32 @@ const requirePlantOutputRead = (req, res, next) => {
   next();
 };
 
+// Fuel management: only admin and selected supervisors (allowedUserIds) can access; others get "Contact admin"
+const FuelAccessConfig = require('../models/FuelAccessConfig');
+const requireFuelAccess = async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    if (req.user.role === 'admin') {
+      return next();
+    }
+    const config = await FuelAccessConfig.getConfig();
+    const allowed = (config.allowedUserIds || []).map(id => id.toString());
+    const userId = req.user._id.toString();
+    if (allowed.includes(userId)) {
+      return next();
+    }
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have access to Fuel Management. Contact your admin for access.'
+    });
+  } catch (err) {
+    console.error('requireFuelAccess error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to check fuel access' });
+  }
+};
+
 module.exports = {
   authenticateToken,
   requirePermission,
@@ -376,5 +402,6 @@ module.exports = {
   requireStepUpdateAccessFromReceipt,
   requireStepUpdateAccessFromConsumption,
   requirePlantInventoryRead,
-  requirePlantOutputRead
+  requirePlantOutputRead,
+  requireFuelAccess
 };
