@@ -335,16 +335,16 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
       }
     }
 
-    // Record vehicle activity in storage site for new item creation
+    // Record vehicle activity and create VehicleTrip so the trip appears in Vehicle Trips Report
     if (vehicle && vehicle._id) {
+      const StorageSite = require('../models/StorageSite');
+      const storageSiteDoc = await StorageSite.findById(storageSite);
+
       try {
-        const StorageSite = require('../models/StorageSite');
-        const storageSiteDoc = await StorageSite.findById(storageSite);
-        
         if (storageSiteDoc) {
           await storageSiteDoc.recordVehicleActivity(
             'receipt', // New item creation is considered a receipt
-            vehicle,
+            { ...vehicle, type: vehicle.vehicleType || vehicle.type },
             item,
             {
               quantity: item.currentStock || 0,
@@ -355,20 +355,27 @@ router.post('/', authenticateToken, requirePermission('inventory.create'), async
             req.user._id
           );
           console.log(`✅ Vehicle activity recorded for new item creation in storage site: ${storageSiteDoc.name}`);
-          await createStorageInboundTrip({
-            storageSite: { _id: storageSiteDoc._id, name: storageSiteDoc.name, code: storageSiteDoc.code },
-            item: { _id: item._id, itemName: item.itemName || item.materialName, category: item.category, unit: item.unit },
-            vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
-            quantity: item.currentStock || 0,
-            user: req.user,
-            supplierName: item.supplier && item.supplier.name ? item.supplier.name : 'Supplier',
-            referenceId: item._id,
-            referenceType: 'inventory'
-          });
         }
       } catch (storageSiteError) {
         console.error('Error recording vehicle activity in storage site:', storageSiteError);
         // Don't fail the inventory creation if storage site update fails
+      }
+
+      // Always create VehicleTrip when vehicle is present so it appears in Vehicle Trips Report
+      try {
+        const site = storageSiteDoc || { _id: storageSite, name: 'Storage Site', code: null };
+        await createStorageInboundTrip({
+          storageSite: { _id: site._id, name: site.name, code: site.code },
+          item: { _id: item._id, itemName: item.itemName || item.materialName, category: item.category, unit: item.unit },
+          vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
+          quantity: item.currentStock || 0,
+          user: req.user,
+          supplierName: item.supplier && item.supplier.name ? item.supplier.name : 'Supplier',
+          referenceId: item._id,
+          referenceType: 'inventory'
+        });
+      } catch (tripError) {
+        console.error('Error creating VehicleTrip for new inventory (report may not show this trip):', tripError);
       }
     }
     
@@ -582,16 +589,16 @@ router.post(
       await item.save();
     }
 
-    // Record vehicle activity in storage site
+    // Record vehicle activity and create VehicleTrip so restock appears in Vehicle Trips Report
     if (vehicle && vehicle._id) {
+      const StorageSite = require('../models/StorageSite');
+      const storageSiteDoc = await StorageSite.findById(item.storageSite);
+
       try {
-        const StorageSite = require('../models/StorageSite');
-        const storageSite = await StorageSite.findById(item.storageSite);
-        
-        if (storageSite) {
-          await storageSite.recordVehicleActivity(
+        if (storageSiteDoc) {
+          await storageSiteDoc.recordVehicleActivity(
             'restock',
-            vehicle,
+            { ...vehicle, type: vehicle.vehicleType || vehicle.type },
             item,
             {
               quantity,
@@ -601,21 +608,28 @@ router.post(
             },
             req.user._id
           );
-          console.log(`✅ Vehicle activity recorded for storage site: ${storageSite.name}`);
-          await createStorageInboundTrip({
-            storageSite: { _id: storageSite._id, name: storageSite.name, code: storageSite.code },
-            item: { _id: item._id, itemName: item.itemName || item.materialName, category: item.category, unit: item.unit },
-            vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
-            quantity,
-            user: req.user,
-            supplierName: supplierNameForHistory,
-            referenceId: item._id,
-            referenceType: 'inventory'
-          });
+          console.log(`✅ Vehicle activity recorded for storage site: ${storageSiteDoc.name}`);
         }
       } catch (storageSiteError) {
         console.error('Error recording vehicle activity in storage site:', storageSiteError);
         // Don't fail the restock if storage site update fails
+      }
+
+      // Always create VehicleTrip when vehicle is present so restock appears in Vehicle Trips Report
+      try {
+        const site = storageSiteDoc || { _id: item.storageSite, name: 'Storage Site', code: null };
+        await createStorageInboundTrip({
+          storageSite: { _id: site._id, name: site.name, code: site.code },
+          item: { _id: item._id, itemName: item.itemName || item.materialName, category: item.category, unit: item.unit },
+          vehicle: { _id: vehicle._id, vehicleNumber: vehicle.vehicleNumber, vehicleType: vehicle.vehicleType || vehicle.type, assignedTo: vehicle.assignedTo },
+          quantity,
+          user: req.user,
+          supplierName: supplierNameForHistory,
+          referenceId: item._id,
+          referenceType: 'inventory'
+        });
+      } catch (tripError) {
+        console.error('Error creating VehicleTrip for restock (report may not show this trip):', tripError);
       }
     }
     
