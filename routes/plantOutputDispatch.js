@@ -240,6 +240,11 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
     // Create step inventory receipt if dispatching to a construction step
     if (destinationType === 'construction_step') {
       try {
+        // Resolve siteId (step is already loaded above in this branch)
+        const siteIdForReceipt = step.siteId && (step.siteId._id || step.siteId);
+        if (!siteIdForReceipt) {
+          console.warn('Step inventory receipt skipped: no siteId for step', destinationId);
+        } else {
         // Map plant output units to step inventory units
         const unitMapping = {
           'cubic_meters': 'm³',
@@ -253,7 +258,7 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
         
         const stepInventoryReceipt = new StepInventoryReceipt({
           stepId: destinationId,
-          siteId: destinationDetails.siteId, // Use siteId from step details
+          siteId: siteIdForReceipt,
           sourceType: 'plant',
           sourceId: sourceOutput.plant._id,
           sourceName: sourceOutput.plant.name,
@@ -287,6 +292,7 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
         });
         
         await stepInventoryReceipt.save();
+        }
       } catch (stepReceiptError) {
         console.error('Error creating step inventory receipt:', stepReceiptError);
         // Don't fail the dispatch if step receipt creation fails
