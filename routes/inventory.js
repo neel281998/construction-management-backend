@@ -211,11 +211,12 @@ router.get('/', authenticateToken, requirePermission('inventory.read'), async (r
   }
 });
 
-// Get single inventory item
+// Get single inventory item (full restockHistory for detail page, no limit)
 router.get('/:id', authenticateToken, requirePermission('inventory.read'), async (req, res) => {
   try {
     const item = await Inventory.findById(req.params.id)
-      .populate('storageSite', 'name code');
+      .populate('storageSite', 'name code')
+      .populate('restockHistory.restockedBy', 'firstName lastName');
     
     if (!item) {
       return res.status(404).json({
