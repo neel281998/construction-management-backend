@@ -75,6 +75,12 @@ const vehicleSchema = new mongoose.Schema({
     ref: 'Site',
     default: null
   },
+  licensePlate: { type: String, trim: true },
+  vin: { type: String, trim: true },
+  engineHours: { type: Number, min: 0 },
+  insuranceExpiry: { type: Date },
+  registrationExpiry: { type: Date },
+  notes: { type: String },
   fuelLevel: {
     type: Number,
     min: [0, 'Fuel level cannot be negative'],
