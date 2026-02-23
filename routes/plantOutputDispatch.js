@@ -1064,15 +1064,8 @@ router.post('/confirm-receipt/:dispatchId', authenticateToken, requirePermission
     await dispatch.save();
     
     // Find or create the step inventory receipt (so it appears in Receipt History)
+    // Each dispatch must get its own receipt - never update a receipt from a different dispatch
     let stepReceipt = await StepInventoryReceipt.findOne({ plantOutputDispatchId: dispatch._id });
-    if (!stepReceipt) {
-      stepReceipt = await StepInventoryReceipt.findOne({
-        stepId: dispatch.destination.id,
-        sourceType: 'plant',
-        sourceId: dispatch.fromPlant._id,
-        materialName: dispatch.outputName
-      }).sort({ createdAt: -1 });
-    }
 
     if (!stepReceipt) {
       // Create StepInventoryReceipt when confirming receipt (in case it wasn't created at dispatch)
