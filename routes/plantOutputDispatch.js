@@ -1062,13 +1062,64 @@ router.post('/confirm-receipt/:dispatchId', authenticateToken, requirePermission
     
     await dispatch.save();
     
-    // Update the corresponding step inventory receipt
-    const stepReceipt = await StepInventoryReceipt.findOne({
+    // Find or create the step inventory receipt (so it appears in Receipt History)
+    let stepReceipt = await StepInventoryReceipt.findOne({
       stepId: dispatch.destination.id,
       sourceType: 'plant',
       sourceId: dispatch.fromPlant._id,
       materialName: dispatch.outputName
     }).sort({ createdAt: -1 }); // Get the most recent one
+
+    if (!stepReceipt) {
+      // Create StepInventoryReceipt when confirming receipt (in case it wasn't created at dispatch)
+      const Step = require('../models/Step');
+      const step = await Step.findById(dispatch.destination.id).select('siteId').lean();
+      const siteId = step?.siteId;
+      if (siteId) {
+        const unitMapping = {
+          cubic_meters: 'm³',
+          tons: 'tons',
+          pieces: 'pieces',
+          kg: 'kg',
+          liters: 'liters'
+        };
+        const mappedUnit = unitMapping[dispatch.unit] || 'm³';
+        stepReceipt = new StepInventoryReceipt({
+          stepId: dispatch.destination.id,
+          siteId,
+          sourceType: 'plant',
+          sourceId: dispatch.fromPlant._id,
+          sourceName: dispatch.fromPlant?.name || 'Plant',
+          materialName: dispatch.outputName,
+          materialCategory: 'cement_concrete',
+          materialType: 'primary',
+          quantity: receivedQuantity,
+          unit: mappedUnit,
+          deliveryDate: new Date(),
+          deliveryImages: receiptImages || [],
+          deliveryNotes: notes || '',
+          receivedBy: {
+            _id: req.user._id,
+            firstName: req.user.firstName,
+            lastName: req.user.lastName,
+            email: req.user.email
+          },
+          receivedAt: new Date(),
+          verifiedBy: req.user._id,
+          verificationDate: new Date(),
+          verificationNotes: `Plant output received at step. Dispatched: ${dispatch.quantity} ${dispatch.unit}, Received: ${receivedQuantity} ${dispatch.unit}`,
+          status: 'verified',
+          vehicle: dispatch.vehicle ? {
+            _id: dispatch.vehicle._id,
+            vehicleNumber: dispatch.vehicle.vehicleNumber,
+            vehicleType: dispatch.vehicle.vehicleType,
+            driverName: dispatch.vehicle.driverName,
+            driverPhone: dispatch.vehicle.driverPhone
+          } : undefined
+        });
+        await stepReceipt.save();
+      }
+    }
     
     if (stepReceipt) {
       // Update the step inventory receipt with confirmed details
