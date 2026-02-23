@@ -683,6 +683,51 @@ router.get('/plant/:plantId', authenticateToken, requirePlantOutputRead, async (
   }
 });
 
+// Get all dispatches for a specific plant output (for output details page)
+router.get('/output/:outputId', authenticateToken, requirePlantOutputRead, async (req, res) => {
+  try {
+    const { outputId } = req.params;
+
+    const output = await PlantOutput.findById(outputId).populate('plant', 'name plantType');
+    if (!output) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plant output not found'
+      });
+    }
+
+    // Check access control for non-admin users
+    const plantIdStr = output.plant && (output.plant._id ? output.plant._id.toString() : output.plant.toString());
+    if (req.user.role !== 'admin') {
+      const perms = Array.isArray(req.user.permissions) ? req.user.permissions : [];
+      const hasPlantPermission = perms.some((p) => typeof p === 'string' && (p.startsWith('plant.') || p.startsWith('plant_output.')));
+      const assignedPlants = (req.user.assignedPlants || []).map((id) => (id && id.toString ? id.toString() : id));
+      if (!hasPlantPermission && !assignedPlants.includes(plantIdStr)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied to this plant output'
+        });
+      }
+    }
+
+    const dispatches = await PlantOutputDispatch.find({ outputId })
+      .sort({ dispatchedAt: -1 })
+      .populate('dispatchedBy', 'firstName lastName email')
+      .populate('receivedBy', 'firstName lastName email');
+
+    res.json({
+      success: true,
+      data: { dispatches }
+    });
+  } catch (error) {
+    console.error('Get dispatches by output error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch dispatches for output'
+    });
+  }
+});
+
 // Get pending dispatches for a destination
 router.get('/pending/:destinationType/:destinationId', authenticateToken, requirePlantOutputRead, async (req, res) => {
   try {
