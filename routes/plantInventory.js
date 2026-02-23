@@ -159,7 +159,8 @@ router.get('/', authenticateToken, requirePlantInventoryRead, async (req, res) =
 router.get('/:id', authenticateToken, requirePlantInventoryRead, async (req, res) => {
   try {
     const item = await PlantInventory.findById(req.params.id)
-      .populate('plant', 'name plantType');
+      .populate('plant', 'name plantType')
+      .populate('consumptionHistory.consumedBy', 'firstName lastName');
     
     if (!item) {
       return res.status(404).json({
