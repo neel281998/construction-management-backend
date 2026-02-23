@@ -259,6 +259,7 @@ router.post('/dispatch', authenticateToken, requirePermission('plant_output.upda
         const stepInventoryReceipt = new StepInventoryReceipt({
           stepId: destinationId,
           siteId: siteIdForReceipt,
+          plantOutputDispatchId: dispatch._id,
           sourceType: 'plant',
           sourceId: sourceOutput.plant._id,
           sourceName: sourceOutput.plant.name,
@@ -1063,12 +1064,15 @@ router.post('/confirm-receipt/:dispatchId', authenticateToken, requirePermission
     await dispatch.save();
     
     // Find or create the step inventory receipt (so it appears in Receipt History)
-    let stepReceipt = await StepInventoryReceipt.findOne({
-      stepId: dispatch.destination.id,
-      sourceType: 'plant',
-      sourceId: dispatch.fromPlant._id,
-      materialName: dispatch.outputName
-    }).sort({ createdAt: -1 }); // Get the most recent one
+    let stepReceipt = await StepInventoryReceipt.findOne({ plantOutputDispatchId: dispatch._id });
+    if (!stepReceipt) {
+      stepReceipt = await StepInventoryReceipt.findOne({
+        stepId: dispatch.destination.id,
+        sourceType: 'plant',
+        sourceId: dispatch.fromPlant._id,
+        materialName: dispatch.outputName
+      }).sort({ createdAt: -1 });
+    }
 
     if (!stepReceipt) {
       // Create StepInventoryReceipt when confirming receipt (in case it wasn't created at dispatch)
@@ -1087,6 +1091,7 @@ router.post('/confirm-receipt/:dispatchId', authenticateToken, requirePermission
         stepReceipt = new StepInventoryReceipt({
           stepId: dispatch.destination.id,
           siteId,
+          plantOutputDispatchId: dispatch._id,
           sourceType: 'plant',
           sourceId: dispatch.fromPlant._id,
           sourceName: dispatch.fromPlant?.name || 'Plant',
@@ -1122,6 +1127,10 @@ router.post('/confirm-receipt/:dispatchId', authenticateToken, requirePermission
     }
     
     if (stepReceipt) {
+      // Ensure dispatch link for future lookups (handles legacy receipts)
+      if (!stepReceipt.plantOutputDispatchId) {
+        stepReceipt.plantOutputDispatchId = dispatch._id;
+      }
       // Update the step inventory receipt with confirmed details
       stepReceipt.quantity = receivedQuantity;
       stepReceipt.remainingQuantity = receivedQuantity - stepReceipt.consumedQuantity;

@@ -11,6 +11,12 @@ const stepInventoryReceiptSchema = new mongoose.Schema({
     ref: 'Site',
     required: true
   },
+  // Optional: links to plant output dispatch for correct find/update when confirming
+  plantOutputDispatchId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'PlantOutputDispatch',
+    required: false
+  },
   // Source information
   sourceType: {
     type: String,
