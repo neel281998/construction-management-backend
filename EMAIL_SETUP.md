@@ -2,6 +2,15 @@
 
 This guide explains how to configure email settings for password reset functionality in your Construction Management API.
 
+## ⚠️ Emails Not Arriving?
+
+If users don't receive password reset emails:
+
+1. **Set environment variables** – `EMAIL_HOST`, `EMAIL_USER`, and `EMAIL_PASS` must be set in your deployment (e.g. Vercel → Project → Settings → Environment Variables).
+2. **Gmail** – Use an [App Password](https://myaccount.google.com/apppasswords), not your normal password. 2FA must be enabled.
+3. **Check spam** – Ask users to check their spam/junk folder.
+4. **Check logs** – Your server logs will show `EMAIL CONFIGURATION MISSING` or `Failed to send password reset email` if something is wrong.
+
 ## Email Configuration Variables
 
 Your backend uses these environment variables for email functionality:

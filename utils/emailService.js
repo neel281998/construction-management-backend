@@ -19,6 +19,13 @@ const createTransporter = () => {
 // Send OTP email
 const sendOTPEmail = async (email, otp, userName, type = 'verification') => {
   try {
+    if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.error(
+        'EMAIL CONFIGURATION MISSING: Set EMAIL_HOST, EMAIL_USER, and EMAIL_PASS in your environment. ' +
+        'See backend/EMAIL_SETUP.md for setup. Emails will not be sent until configured.'
+      );
+      throw new Error('Email service not configured');
+    }
     const transporter = createTransporter();
     
     const isReset = type === 'reset';
