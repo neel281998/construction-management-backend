@@ -680,19 +680,23 @@ router.get('/profile', authenticateToken, async (req, res) => {
 // Update user profile
 router.put('/profile', authenticateToken, async (req, res) => {
   try {
-    const { firstName, lastName, phone } = req.body;
+    const { firstName, lastName, phone, location, avatar } = req.body;
     const userId = req.user._id;
     
     const updateData = {};
-    if (firstName) updateData.firstName = firstName;
-    if (lastName) updateData.lastName = lastName;
-    if (phone) updateData.phone = phone;
+    if (firstName !== undefined) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (phone !== undefined) updateData.phone = phone;
+    if (location !== undefined) updateData.location = location || null;
+    if (avatar !== undefined) updateData.avatar = avatar || null;
     
     const user = await User.findByIdAndUpdate(
       userId,
       updateData,
       { new: true, runValidators: true }
-    ).select('-password');
+    )
+      .select('-password')
+      .populate('assignedSites', 'name status progress');
     
     res.json({
       success: true,

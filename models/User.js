@@ -44,8 +44,14 @@ const userSchema = new mongoose.Schema({
     default: 'user'
   },
   avatar: {
-    type: String, // GridFS file ID
+    type: String, // GridFS file ID or URL
     default: null
+  },
+  location: {
+    type: String,
+    default: null,
+    trim: true,
+    maxlength: [200, 'Location cannot exceed 200 characters']
   },
   isActive: {
     type: Boolean,
