@@ -576,6 +576,17 @@ router.delete('/:id/restock/:entryId', authenticateToken, requirePermission('pla
 
     item.currentStock = Math.max(0, Number(item.currentStock || 0) - quantityToRollback);
     restockEntry.deleteOne();
+
+    // Recompute lastRestocked so reports/date filters stay accurate.
+    // `plantReports` uses `lastRestocked` for date filtering, not restockHistory.
+    const remainingRestocks = Array.isArray(item.restockHistory) ? item.restockHistory : [];
+    if (remainingRestocks.length > 0) {
+      const last = remainingRestocks[remainingRestocks.length - 1];
+      item.lastRestocked = last && last.restockedAt ? new Date(last.restockedAt) : null;
+    } else {
+      item.lastRestocked = null;
+    }
+
     await item.save();
 
     return res.json({
