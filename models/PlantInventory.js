@@ -174,6 +174,16 @@ const plantInventorySchema = new mongoose.Schema({
       type: Number,
       required: false,
       min: [0, 'Cost cannot be negative']
+    },
+    tpWeight: {
+      type: Number,
+      required: false,
+      min: [0, 'T.p weight cannot be negative']
+    },
+    parchiNo: {
+      type: String,
+      required: false,
+      trim: true
     }
   }],
   consumptionHistory: [{
@@ -289,7 +299,7 @@ plantInventorySchema.virtual('stockPercentage').get(function() {
 });
 
 // Method to restock item
-plantInventorySchema.methods.restock = function(quantity, supplier, restockedBy, notes = '', vehicle = null, cost = null) {
+plantInventorySchema.methods.restock = function(quantity, supplier, restockedBy, notes = '', vehicle = null, cost = null, tpWeight = null, parchiNo = null) {
   console.log('🌱 Plant inventory restock method called with:', {
     quantity,
     supplier,
@@ -306,7 +316,9 @@ plantInventorySchema.methods.restock = function(quantity, supplier, restockedBy,
     restockedBy,
     notes,
     vehicle,
-    cost
+    cost,
+    tpWeight,
+    parchiNo
   };
   
   this.restockHistory.push(restockEntry);

@@ -1,10 +1,21 @@
 const express = require('express');
 const PlantInventory = require('../models/PlantInventory');
 const Plant = require('../models/Plant');
+const Vehicle = require('../models/Vehicle');
+const VehicleTrip = require('../models/VehicleTrip');
 const { authenticateToken, requirePermission, requirePlantInventoryRead } = require('../middleware/auth');
 const { createPlantInboundTrip } = require('../utils/vehicleTripService');
 
 const router = express.Router();
+
+function isSameDay(a, b) {
+  if (!a || !b) return false;
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+  return d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+}
 
 // Helper function to recalculate consumption rates
 const recalculateConsumptionRates = (item) => {
@@ -307,7 +318,7 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
 // Restock plant inventory item
 router.post('/:id/restock', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
   try {
-    const { quantity, supplier, notes, vehicle } = req.body;
+    const { quantity, supplier, notes, vehicle, tpWeight, parchiNo } = req.body;
     
     if (!quantity || quantity <= 0) {
       return res.status(400).json({
@@ -344,8 +355,17 @@ router.post('/:id/restock', authenticateToken, requirePermission('plant_inventor
     
     const previousStock = item.currentStock;
     
+    const parsedTpWeight = tpWeight !== undefined && tpWeight !== null && tpWeight !== '' ? Number(tpWeight) : null;
+    if (parsedTpWeight !== null && (Number.isNaN(parsedTpWeight) || parsedTpWeight < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'T.p weight must be a valid non-negative number'
+      });
+    }
+    const parsedParchiNo = parchiNo ? String(parchiNo).trim() : null;
+
     // Use the restock method
-    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, req.body.cost);
+    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, req.body.cost, parsedTpWeight, parsedParchiNo);
     
     // Update vehicle trip tracking and create VehicleTrip
     if (vehicle && vehicle._id) {
@@ -480,6 +500,152 @@ router.post('/:id/consume', authenticateToken, requirePermission('plant_inventor
     res.status(500).json({
       success: false,
       message: 'Failed to consume plant inventory'
+    });
+  }
+});
+
+// Delete a restock history entry and rollback stock
+router.delete('/:id/restock/:entryId', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
+  try {
+    const item = await PlantInventory.findById(req.params.id);
+
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plant inventory item not found'
+      });
+    }
+
+    const plantIdForCheck = item.plant && item.plant._id ? item.plant._id : item.plant;
+    if (req.user.role !== 'admin' && (!plantIdForCheck || !req.user.assignedPlants.some(function (p) { return p && p.toString() === plantIdForCheck.toString(); }))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this plant inventory item'
+      });
+    }
+
+    const restockEntry = item.restockHistory.id(req.params.entryId);
+    if (!restockEntry) {
+      return res.status(404).json({
+        success: false,
+        message: 'Restock entry not found'
+      });
+    }
+
+    const quantityToRollback = Number(restockEntry.quantity || 0);
+    const restockDate = restockEntry.restockedAt ? new Date(restockEntry.restockedAt) : null;
+    const vehicleId = restockEntry.vehicle && restockEntry.vehicle._id ? restockEntry.vehicle._id : null;
+
+    // Best-effort removal of corresponding VehicleTrip report row.
+    let deletedVehicleTripId = null;
+    if (vehicleId) {
+      const tripQuery = {
+        tripType: 'inbound',
+        destinationType: 'plant',
+        destinationId: item.plant,
+        itemId: item._id,
+        referenceType: 'plant_inventory',
+        'vehicle._id': vehicleId,
+        quantity: quantityToRollback
+      };
+
+      if (restockDate) {
+        const dayStart = new Date(restockDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(restockDate);
+        dayEnd.setHours(23, 59, 59, 999);
+        tripQuery.tripDate = { $gte: dayStart, $lte: dayEnd };
+      }
+
+      const tripDoc = await VehicleTrip.findOne(tripQuery).sort({ tripDate: -1 });
+      if (tripDoc) {
+        deletedVehicleTripId = tripDoc._id;
+        await tripDoc.deleteOne();
+      }
+
+      // Roll back vehicle trip counters.
+      const vehicleDoc = await Vehicle.findById(vehicleId);
+      if (vehicleDoc && vehicleDoc.tripTracking) {
+        vehicleDoc.tripTracking.totalTrips = Math.max(0, Number(vehicleDoc.tripTracking.totalTrips || 0) - 1);
+        if (restockDate && isSameDay(vehicleDoc.tripTracking.lastTripDate, restockDate)) {
+          vehicleDoc.tripTracking.dailyTrips = Math.max(0, Number(vehicleDoc.tripTracking.dailyTrips || 0) - 1);
+        }
+        await vehicleDoc.save();
+      }
+    }
+
+    item.currentStock = Math.max(0, Number(item.currentStock || 0) - quantityToRollback);
+    restockEntry.deleteOne();
+    await item.save();
+
+    return res.json({
+      success: true,
+      message: 'Restock entry deleted successfully',
+      data: {
+        itemId: item._id,
+        deletedEntryId: req.params.entryId,
+        deletedVehicleTripId,
+        rolledBackQuantity: quantityToRollback,
+        newStock: item.currentStock
+      }
+    });
+  } catch (error) {
+    console.error('Delete restock entry error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete restock entry'
+    });
+  }
+});
+
+// Delete a consumption history entry and restore stock
+router.delete('/:id/consumption/:entryId', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
+  try {
+    const item = await PlantInventory.findById(req.params.id);
+
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Plant inventory item not found'
+      });
+    }
+
+    const plantIdForCheck = item.plant && item.plant._id ? item.plant._id : item.plant;
+    if (req.user.role !== 'admin' && (!plantIdForCheck || !req.user.assignedPlants.some(function (p) { return p && p.toString() === plantIdForCheck.toString(); }))) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this plant inventory item'
+      });
+    }
+
+    const consumptionEntry = item.consumptionHistory.id(req.params.entryId);
+    if (!consumptionEntry) {
+      return res.status(404).json({
+        success: false,
+        message: 'Consumption entry not found'
+      });
+    }
+
+    const quantityToRestore = Number(consumptionEntry.quantity || 0);
+    item.currentStock = Number(item.currentStock || 0) + quantityToRestore;
+    consumptionEntry.deleteOne();
+    await item.save();
+
+    return res.json({
+      success: true,
+      message: 'Consumption entry deleted successfully',
+      data: {
+        itemId: item._id,
+        deletedEntryId: req.params.entryId,
+        restoredQuantity: quantityToRestore,
+        newStock: item.currentStock
+      }
+    });
+  } catch (error) {
+    console.error('Delete consumption entry error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete consumption entry'
     });
   }
 });
@@ -756,7 +922,7 @@ router.put('/:itemId', authenticateToken, requirePermission('plant_inventory.upd
 // Restock plant inventory item (specific route before /:itemId/add-stock)
 router.post('/restock', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
   try {
-    const { itemId, quantity, supplier, notes, cost, vehicle } = req.body;
+    const { itemId, quantity, supplier, notes, cost, vehicle, tpWeight, parchiNo } = req.body;
     
     if (!itemId || !quantity) {
       return res.status(400).json({
@@ -800,8 +966,17 @@ router.post('/restock', authenticateToken, requirePermission('plant_inventory.up
     
     const previousStock = item.currentStock;
     
+    const parsedTpWeight = tpWeight !== undefined && tpWeight !== null && tpWeight !== '' ? Number(tpWeight) : null;
+    if (parsedTpWeight !== null && (Number.isNaN(parsedTpWeight) || parsedTpWeight < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'T.p weight must be a valid non-negative number'
+      });
+    }
+    const parsedParchiNo = parchiNo ? String(parchiNo).trim() : null;
+
     // Use the restock method to properly add to history
-    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, cost);
+    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, cost, parsedTpWeight, parsedParchiNo);
     
     // Update vehicle trip tracking if vehicle is provided
     if (vehicle && vehicle._id) {
@@ -874,7 +1049,7 @@ router.post('/restock', authenticateToken, requirePermission('plant_inventory.up
 router.post('/:itemId/add-stock', authenticateToken, requirePermission('plant_inventory.update'), async (req, res) => {
   try {
     const { itemId } = req.params;
-    const { quantity, supplier, notes, vehicle } = req.body;
+    const { quantity, supplier, notes, vehicle, tpWeight, parchiNo } = req.body;
     
     console.log('🌱 Plant inventory add-stock request received:', {
       itemId,
@@ -919,8 +1094,17 @@ router.post('/:itemId/add-stock', authenticateToken, requirePermission('plant_in
     
     const previousStock = item.currentStock;
     
+    const parsedTpWeight = tpWeight !== undefined && tpWeight !== null && tpWeight !== '' ? Number(tpWeight) : null;
+    if (parsedTpWeight !== null && (Number.isNaN(parsedTpWeight) || parsedTpWeight < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'T.p weight must be a valid non-negative number'
+      });
+    }
+    const parsedParchiNo = parchiNo ? String(parchiNo).trim() : null;
+
     // Use the restock method to properly add to history with vehicle and cost
-    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, req.body.cost);
+    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, req.body.cost, parsedTpWeight, parsedParchiNo);
     
     // Update vehicle trip tracking if vehicle is provided
     if (vehicle && vehicle._id) {

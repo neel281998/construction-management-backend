@@ -80,6 +80,9 @@ const vehicleSchema = new mongoose.Schema({
   engineHours: { type: Number, min: 0 },
   insuranceExpiry: { type: Date },
   registrationExpiry: { type: Date },
+  fitnessExpiry: { type: Date },
+  taxExpiry: { type: Date },
+  pucExpiry: { type: Date },
   notes: { type: String },
   fuelLevel: {
     type: Number,

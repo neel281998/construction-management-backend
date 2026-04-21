@@ -453,9 +453,10 @@ router.post(
   async (req, res) => {
   try {
     const { itemId } = req.body;
-    let { supplier, notes } = req.body;
+    let { supplier, notes, parchiNo } = req.body;
     const rawQuantity = req.body.quantity;
     const rawCost = req.body.cost;
+    const rawTpWeight = req.body.tpWeight;
     let vehicle = req.body.vehicle;
 
     if (vehicle && typeof vehicle === 'string') {
@@ -487,6 +488,17 @@ router.post(
       }
     }
 
+    let parsedTpWeight;
+    if (rawTpWeight !== undefined && rawTpWeight !== null && rawTpWeight !== '') {
+      parsedTpWeight = typeof rawTpWeight === 'string' ? parseFloat(rawTpWeight) : Number(rawTpWeight);
+      if (Number.isNaN(parsedTpWeight) || parsedTpWeight < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'T.p weight must be a valid non-negative number'
+        });
+      }
+    }
+
     if (supplier) {
       supplier = supplier.toString().trim();
       if (!supplier.length) {
@@ -498,6 +510,13 @@ router.post(
       notes = notes.toString().trim();
       if (!notes.length) {
         notes = undefined;
+      }
+    }
+
+    if (parchiNo) {
+      parchiNo = parchiNo.toString().trim();
+      if (!parchiNo.length) {
+        parchiNo = undefined;
       }
     }
 
@@ -520,6 +539,8 @@ router.post(
       supplier,
       notes,
       cost: parsedCost,
+      tpWeight: parsedTpWeight,
+      parchiNo,
       vehicle
     });
 
@@ -578,7 +599,9 @@ router.post(
       notes,
       vehicle,
       parsedCost,
-      attachments
+      attachments,
+      parsedTpWeight,
+      parchiNo
     );
     
     // Update supplier if provided
@@ -700,6 +723,8 @@ router.post(
 router.post('/:id/restock', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
   try {
     const { quantity, supplier, notes, vehicle } = req.body;
+    const tpWeight = req.body.tpWeight;
+    const parchiNo = req.body.parchiNo;
     
     if (!quantity || quantity <= 0) {
       return res.status(400).json({
@@ -719,8 +744,17 @@ router.post('/:id/restock', authenticateToken, requirePermission('inventory.upda
     
     const previousStock = item.currentStock;
     
+    const parsedTpWeight = tpWeight !== undefined && tpWeight !== null && tpWeight !== '' ? Number(tpWeight) : null;
+    if (parsedTpWeight !== null && (Number.isNaN(parsedTpWeight) || parsedTpWeight < 0)) {
+      return res.status(400).json({
+        success: false,
+        message: 'T.p weight must be a valid non-negative number'
+      });
+    }
+    const parsedParchiNo = parchiNo ? String(parchiNo).trim() : null;
+
     // Use the restock method
-    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, req.body.cost);
+    await item.restock(quantity, supplier || item.supplier.name, req.user._id, notes, vehicle, req.body.cost, [], parsedTpWeight, parsedParchiNo);
     
     // Update vehicle trip tracking if vehicle is provided
     if (vehicle && vehicle._id) {
@@ -922,6 +956,9 @@ router.get('/meta/item-names', authenticateToken, requirePermission('inventory.r
       '10mm',
       '20mm',
       '40mm',
+      'River sand',
+      'Washing sand',
+      'Crusher main',
       'bitumen',
       'ldo',
       'cement',

@@ -172,7 +172,8 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
       unit,
       qualitySpecs,
       expiryDate,
-      notes
+      notes,
+      consumedMaterials
     } = req.body;
     
     // Validate required fields
@@ -230,6 +231,17 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
     }
     
     // Create plant output
+    const sanitizedConsumedMaterials = Array.isArray(consumedMaterials)
+      ? consumedMaterials
+          .filter((item) => item && item.materialName && Number(item.quantity) > 0)
+          .map((item) => ({
+            materialId: item.materialId || undefined,
+            materialName: String(item.materialName),
+            quantity: Number(item.quantity),
+            unit: String(item.unit || '')
+          }))
+      : [];
+
     const output = new PlantOutput({
       plant: plantId,
       batch: batchId,
@@ -238,6 +250,7 @@ router.post('/', authenticateToken, requirePermission('plant_inventory.create'),
       currentStock: quantity,
       unit,
       qualitySpecs,
+      consumedMaterials: sanitizedConsumedMaterials,
       productionDate: batch ? batch.endTime : new Date(),
       expiryDate,
       createdBy: req.user._id,

@@ -87,6 +87,27 @@ const plantOutputSchema = new mongoose.Schema({
     },
     other: mongoose.Schema.Types.Mixed
   },
+  consumedMaterials: [{
+    materialId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'PlantInventory',
+      required: false
+    },
+    materialName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 0
+    },
+    unit: {
+      type: String,
+      required: true
+    }
+  }],
   productionDate: {
     type: Date,
     required: true,
