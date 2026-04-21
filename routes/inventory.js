@@ -3,11 +3,22 @@ const multer = require('multer');
 const mongoose = require('mongoose');
 const { GridFSBucket } = require('mongodb');
 const Inventory = require('../models/Inventory');
+const Vehicle = require('../models/Vehicle');
+const VehicleTrip = require('../models/VehicleTrip');
 const { authenticateToken, requirePermission } = require('../middleware/auth');
 const { logActivity, getActivityStyle } = require('../utils/activityLogger');
 const { createStorageInboundTrip } = require('../utils/vehicleTripService');
 
 const router = express.Router();
+
+function isSameDay(a, b) {
+  if (!a || !b) return false;
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+  return d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+}
 
 const restockStorage = multer.memoryStorage();
 const allowedRestockMimeTypes = (process.env.RESTOCK_ALLOWED_MIME_TYPES || 'image/jpeg,image/png,image/webp,image/heic,image/heif').split(',');
@@ -821,6 +832,111 @@ router.post('/:id/restock', authenticateToken, requirePermission('inventory.upda
     res.status(500).json({
       success: false,
       message: 'Failed to restock inventory item'
+    });
+  }
+});
+
+// Delete a restock history entry and rollback stock (storage-site inventory)
+router.delete('/:id/restock/:entryId', authenticateToken, requirePermission('inventory.update'), async (req, res) => {
+  try {
+    const item = await Inventory.findById(req.params.id).populate('storageSite', 'name code');
+
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: 'Inventory item not found'
+      });
+    }
+
+    // Check access control for non-admin users
+    if (req.user.role !== 'admin' && item.storageSite && !req.user.assignedStorageSites.includes(item.storageSite._id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied to this inventory item'
+      });
+    }
+
+    const restockEntry = item.restockHistory.id(req.params.entryId);
+    if (!restockEntry) {
+      return res.status(404).json({
+        success: false,
+        message: 'Restock entry not found'
+      });
+    }
+
+    const quantityToRollback = Number(restockEntry.quantity || 0);
+    const restockDate = restockEntry.restockedAt ? new Date(restockEntry.restockedAt) : null;
+    const vehicleId = restockEntry.vehicle && restockEntry.vehicle._id ? restockEntry.vehicle._id : null;
+
+    // Best-effort removal of corresponding VehicleTrip report row.
+    let deletedVehicleTripId = null;
+    if (vehicleId && item.storageSite && item.storageSite._id) {
+      const tripQuery = {
+        tripType: 'inbound',
+        destinationType: 'storage_site',
+        destinationId: item.storageSite._id,
+        itemId: item._id,
+        referenceType: 'inventory',
+        'vehicle._id': vehicleId,
+        quantity: quantityToRollback
+      };
+
+      if (restockDate) {
+        const dayStart = new Date(restockDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(restockDate);
+        dayEnd.setHours(23, 59, 59, 999);
+        tripQuery.tripDate = { $gte: dayStart, $lte: dayEnd };
+      }
+
+      const tripDoc = await VehicleTrip.findOne(tripQuery).sort({ tripDate: -1 });
+      if (tripDoc) {
+        deletedVehicleTripId = tripDoc._id;
+        await tripDoc.deleteOne();
+      }
+
+      // Roll back vehicle trip counters.
+      const vehicleDoc = await Vehicle.findById(vehicleId);
+      if (vehicleDoc && vehicleDoc.tripTracking) {
+        vehicleDoc.tripTracking.totalTrips = Math.max(0, Number(vehicleDoc.tripTracking.totalTrips || 0) - 1);
+        if (restockDate && isSameDay(vehicleDoc.tripTracking.lastTripDate, restockDate)) {
+          vehicleDoc.tripTracking.dailyTrips = Math.max(0, Number(vehicleDoc.tripTracking.dailyTrips || 0) - 1);
+        }
+        await vehicleDoc.save();
+      }
+    }
+
+    item.currentStock = Math.max(0, Number(item.currentStock || 0) - quantityToRollback);
+    restockEntry.deleteOne();
+
+    // Recompute lastRestocked so reports/date filters stay accurate.
+    const remainingRestocks = Array.isArray(item.restockHistory) ? item.restockHistory : [];
+    if (remainingRestocks.length > 0) {
+      const last = remainingRestocks[remainingRestocks.length - 1];
+      item.lastRestocked = last && last.restockedAt ? new Date(last.restockedAt) : null;
+    } else {
+      item.lastRestocked = null;
+    }
+
+    await item.save();
+
+    return res.json({
+      success: true,
+      message: 'Restock entry deleted successfully',
+      data: {
+        itemId: item._id,
+        deletedEntryId: req.params.entryId,
+        deletedVehicleTripId,
+        rolledBackQuantity: quantityToRollback,
+        newStock: item.currentStock,
+        lastRestocked: item.lastRestocked
+      }
+    });
+  } catch (error) {
+    console.error('Delete inventory restock entry error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete restock entry'
     });
   }
 });
