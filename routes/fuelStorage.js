@@ -84,6 +84,41 @@ router.post('/', async (req, res) => {
       lastUpdatedBy: req.user._id
     };
 
+    const capacityLiters = Number(storageData.capacityLiters);
+    const initialReading = storageData.initialReading != null ? Number(storageData.initialReading) : 0;
+    const currentReading = storageData.currentReading != null ? Number(storageData.currentReading) : initialReading;
+
+    if (!Number.isFinite(capacityLiters) || capacityLiters < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Capacity must be a valid non-negative number'
+      });
+    }
+
+    if (!Number.isFinite(initialReading) || initialReading < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Initial reading must be a valid non-negative number'
+      });
+    }
+
+    if (!Number.isFinite(currentReading) || currentReading < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current reading must be a valid non-negative number'
+      });
+    }
+
+    if (initialReading > capacityLiters || currentReading > capacityLiters) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reading cannot exceed storage capacity'
+      });
+    }
+
+    storageData.initialReading = initialReading;
+    storageData.currentReading = currentReading;
+
     // Enforce single main storage
     if (storageData.storageType === 'main') {
       const existingMain = await FuelStorage.findOne({ storageType: 'main' });
@@ -132,6 +167,53 @@ router.put('/:id', async (req, res) => {
       ...req.body,
       lastUpdatedBy: req.user._id
     };
+
+    if (
+      updateData.capacityLiters != null ||
+      updateData.currentReading != null ||
+      updateData.initialReading != null
+    ) {
+      const existing = await FuelStorage.findById(req.params.id);
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          message: 'Fuel storage not found'
+        });
+      }
+
+      const capacityLiters = updateData.capacityLiters != null ? Number(updateData.capacityLiters) : Number(existing.capacityLiters);
+      const initialReading = updateData.initialReading != null ? Number(updateData.initialReading) : Number(existing.initialReading);
+      const currentReading = updateData.currentReading != null ? Number(updateData.currentReading) : Number(existing.currentReading);
+
+      if (!Number.isFinite(capacityLiters) || capacityLiters < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Capacity must be a valid non-negative number'
+        });
+      }
+      if (!Number.isFinite(initialReading) || initialReading < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Initial reading must be a valid non-negative number'
+        });
+      }
+      if (!Number.isFinite(currentReading) || currentReading < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current reading must be a valid non-negative number'
+        });
+      }
+      if (initialReading > capacityLiters || currentReading > capacityLiters) {
+        return res.status(400).json({
+          success: false,
+          message: 'Reading cannot exceed storage capacity'
+        });
+      }
+
+      updateData.capacityLiters = capacityLiters;
+      updateData.initialReading = initialReading;
+      updateData.currentReading = currentReading;
+    }
 
     const storage = await FuelStorage.findByIdAndUpdate(
       req.params.id,
@@ -396,6 +478,13 @@ router.post('/:id/daily-reading', async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Fuel storage not found'
+      });
+    }
+
+    if (Number(reading) > Number(storage.capacityLiters)) {
+      return res.status(400).json({
+        success: false,
+        message: `Reading cannot exceed capacity (${storage.capacityLiters} L)`
       });
     }
 

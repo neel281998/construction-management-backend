@@ -484,10 +484,37 @@ router.get('/sub-pumps/:id', requirePermission('fuel.read'), async (req, res) =>
 router.post('/sub-pumps', requirePermission('fuel.create'), async (req, res) => {
   try {
     const { initialPumpReading, initialPumpReadingImage, ...restBody } = req.body;
-    
+
+    const parsedTotalCapacity = restBody.totalCapacity != null ? Number(restBody.totalCapacity) : NaN;
+    const parsedInitialFuelLevel = req.body.initialFuelLevel != null && req.body.initialFuelLevel !== ''
+      ? Number(req.body.initialFuelLevel)
+      : 0;
+
+    if (!Number.isFinite(parsedTotalCapacity) || parsedTotalCapacity < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Total capacity must be a valid non-negative number'
+      });
+    }
+
+    if (!Number.isFinite(parsedInitialFuelLevel) || parsedInitialFuelLevel < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Initial fuel level must be a valid non-negative number'
+      });
+    }
+
+    if (parsedInitialFuelLevel > parsedTotalCapacity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Initial fuel level cannot exceed pump capacity'
+      });
+    }
+
     const subPumpData = {
       ...restBody,
-      currentFuelLevel: req.body.initialFuelLevel || 0,
+      totalCapacity: parsedTotalCapacity,
+      currentFuelLevel: parsedInitialFuelLevel,
       totalDispensed: 0,
       totalAdded: 0
     };
@@ -556,6 +583,43 @@ router.post('/sub-pumps', requirePermission('fuel.create'), async (req, res) => 
 // Update sub pump
 router.put('/sub-pumps/:id', requirePermission('fuel.update'), async (req, res) => {
   try {
+    if (req.body && (req.body.totalCapacity != null || req.body.currentFuelLevel != null)) {
+      const existing = await SubPump.findById(req.params.id).select('totalCapacity currentFuelLevel');
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          message: 'Sub pump not found'
+        });
+      }
+
+      const capacity = req.body.totalCapacity != null ? Number(req.body.totalCapacity) : Number(existing.totalCapacity);
+      const currentFuelLevel = req.body.currentFuelLevel != null ? Number(req.body.currentFuelLevel) : Number(existing.currentFuelLevel);
+
+      if (!Number.isFinite(capacity) || capacity < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Total capacity must be a valid non-negative number'
+        });
+      }
+
+      if (!Number.isFinite(currentFuelLevel) || currentFuelLevel < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current fuel level must be a valid non-negative number'
+        });
+      }
+
+      if (currentFuelLevel > capacity) {
+        return res.status(400).json({
+          success: false,
+          message: 'Current fuel level cannot exceed pump capacity'
+        });
+      }
+
+      req.body.totalCapacity = capacity;
+      req.body.currentFuelLevel = currentFuelLevel;
+    }
+
     const subPump = await SubPump.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -653,6 +717,22 @@ router.post('/sub-pumps/:id/restock', requirePermission('fuel.restock'), async (
       });
     }
 
+    const parsedQuantity = Number(quantity);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid quantity is required'
+      });
+    }
+
+    const newFuelLevel = Number(subPump.currentFuelLevel || 0) + parsedQuantity;
+    if (newFuelLevel > Number(subPump.totalCapacity || 0)) {
+      return res.status(400).json({
+        success: false,
+        message: `Restock quantity exceeds pump capacity (${subPump.totalCapacity} L)`
+      });
+    }
+
     // If fuel is coming from a main storage tank, decrease that tank's fuel level
     // `source` is expected to be the main storage ID or name
     let sourceMainStorage = null;
@@ -666,7 +746,7 @@ router.post('/sub-pumps/:id/restock', requirePermission('fuel.restock'), async (
 
       if (sourceMainStorage) {
         // Ensure main storage has enough fuel to transfer
-        if (sourceMainStorage.currentFuelLevel < quantity) {
+        if (sourceMainStorage.currentFuelLevel < parsedQuantity) {
           return res.status(400).json({
             success: false,
             message: 'Insufficient fuel in main storage for transfer'
@@ -674,15 +754,15 @@ router.post('/sub-pumps/:id/restock', requirePermission('fuel.restock'), async (
         }
 
         // Decrease main storage fuel and track as dispensed
-        sourceMainStorage.currentFuelLevel -= quantity;
-        sourceMainStorage.totalDispensed += quantity;
+        sourceMainStorage.currentFuelLevel -= parsedQuantity;
+        sourceMainStorage.totalDispensed += parsedQuantity;
         await sourceMainStorage.save();
       }
     }
 
     // Update sub pump fuel level
-    subPump.totalAdded += quantity;
-    subPump.currentFuelLevel += quantity; // Add the restocked quantity to current fuel level
+    subPump.totalAdded += parsedQuantity;
+    subPump.currentFuelLevel += parsedQuantity; // Add the restocked quantity to current fuel level
     
     // Update current reading if scale reading is provided
     if (scaleReading) {
@@ -701,7 +781,7 @@ router.post('/sub-pumps/:id/restock', requirePermission('fuel.restock'), async (
       storageType: 'sub',
       storageId: subPump._id,
       storageTypeModel: 'SubPump',
-      quantity,
+      quantity: parsedQuantity,
       scaleReading: scaleReading || subPump.currentReading.value,
       image,
       source,
@@ -718,12 +798,12 @@ router.post('/sub-pumps/:id/restock', requirePermission('fuel.restock'), async (
       action: 'fuel_sub_pump_restocked',
       category: 'fuel',
       title: 'Sub Pump Restocked',
-      message: `${quantity}L added to ${subPump.name}`,
+      message: `${parsedQuantity}L added to ${subPump.name}`,
       entityType: 'sub_pump',
       entityId: subPump._id,
       entityName: subPump.name,
       metadata: {
-        quantity,
+        quantity: parsedQuantity,
         scaleReading,
         source,
         sourceMainStorage: sourceMainStorage ? {
