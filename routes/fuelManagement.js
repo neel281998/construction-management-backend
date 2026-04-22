@@ -287,9 +287,25 @@ router.post('/main-storage/:id/restock', requirePermission('fuel.restock'), asyn
       });
     }
 
+    const parsedQuantity = Number(quantity);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid quantity is required'
+      });
+    }
+
+    const newFuelLevel = Number(mainStorage.currentFuelLevel || 0) + parsedQuantity;
+    if (newFuelLevel > Number(mainStorage.totalCapacity || 0)) {
+      return res.status(400).json({
+        success: false,
+        message: `Restock quantity exceeds storage capacity (${mainStorage.totalCapacity} L)`
+      });
+    }
+
     // Update main storage fuel level
-    mainStorage.totalAdded += quantity;
-    mainStorage.currentFuelLevel += quantity; // Add the restocked quantity to current fuel level
+    mainStorage.totalAdded += parsedQuantity;
+    mainStorage.currentFuelLevel += parsedQuantity; // Add the restocked quantity to current fuel level
     
     // Update current reading if scale reading is provided
     if (scaleReading) {
@@ -308,7 +324,7 @@ router.post('/main-storage/:id/restock', requirePermission('fuel.restock'), asyn
       storageType: 'main',
       storageId: mainStorage._id,
       storageTypeModel: 'MainStorage',
-      quantity,
+      quantity: parsedQuantity,
       scaleReading: scaleReading || mainStorage.currentReading.value,
       image,
       source,
@@ -325,12 +341,12 @@ router.post('/main-storage/:id/restock', requirePermission('fuel.restock'), asyn
       action: 'fuel_main_storage_restocked',
       category: 'fuel',
       title: 'Main Storage Restocked',
-      message: `${quantity}L added to ${mainStorage.name}`,
+      message: `${parsedQuantity}L added to ${mainStorage.name}`,
       entityType: 'main_storage',
       entityId: mainStorage._id,
       entityName: mainStorage.name,
       metadata: {
-        quantity,
+        quantity: parsedQuantity,
         scaleReading
       },
       ...getActivityStyle('fuel_main_storage_restocked'),
